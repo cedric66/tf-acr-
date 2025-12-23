@@ -1,0 +1,20 @@
+# Resource Group Name
+resource_group_name = "rg-dev-aca-build"
+
+# Azure Region
+location = "eastus"
+
+# Azure Container Registry Name (must be globally unique)
+acr_name = "acrdevbuildunique001"
+
+# Storage Account Name (must be globally unique)
+storage_account_name = "stdevbuildunique001"
+
+# File Share Name
+share_name = "build-context"
+
+# Container Apps Environment Name
+env_name = "cae-dev-build"
+
+# Container Apps Job Name
+job_name = "caj-dev-build-image"

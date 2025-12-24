@@ -13,3 +13,8 @@ variable "storage_account_name" {
 variable "share_name" {
   type = string
 }
+
+variable "tags" {
+  type    = map(string)
+  default = {}
+}

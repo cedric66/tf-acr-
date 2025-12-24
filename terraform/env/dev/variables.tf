@@ -32,3 +32,9 @@ variable "job_name" {
   description = "Name of the Container Apps Job"
   default     = "caj-dev-build-image"
 }
+
+variable "tags" {
+  description = "Tags to apply to resources"
+  type        = map(string)
+  default     = {}
+}

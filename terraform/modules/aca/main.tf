@@ -2,12 +2,14 @@ resource "azurerm_container_app_environment" "env" {
   name                = var.env_name
   location            = var.location
   resource_group_name = var.resource_group_name
+  tags                = var.tags
 }
 
 resource "azurerm_user_assigned_identity" "identity" {
   location            = var.location
   name                = "${var.job_name}-identity"
   resource_group_name = var.resource_group_name
+  tags                = var.tags
 }
 
 resource "azurerm_role_assignment" "acr_push" {
@@ -21,6 +23,7 @@ resource "azurerm_container_app_job" "build" {
   location            = var.location
   resource_group_name = var.resource_group_name
   container_app_environment_id = azurerm_container_app_environment.env.id
+  tags                = var.tags
 
   replica_timeout_seconds = 1800
   replica_retry_limit     = 0

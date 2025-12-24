@@ -47,3 +47,8 @@ variable "share_name" {
 variable "source_zip_filename" {
   type = string
 }
+
+variable "tags" {
+  type    = map(string)
+  default = {}
+}

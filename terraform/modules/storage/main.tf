@@ -4,6 +4,7 @@ resource "azurerm_storage_account" "sa" {
   location                 = var.location
   account_tier             = "Standard"
   account_replication_type = "LRS"
+  tags                     = var.tags
 }
 
 resource "azurerm_storage_share" "share" {

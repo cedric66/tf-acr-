@@ -1,6 +1,7 @@
 resource "azurerm_resource_group" "rg" {
   name     = var.resource_group_name
   location = var.location
+  tags     = var.tags
 }
 
 module "acr" {
@@ -8,6 +9,7 @@ module "acr" {
   resource_group_name = azurerm_resource_group.rg.name
   location            = azurerm_resource_group.rg.location
   acr_name            = var.acr_name
+  tags                = var.tags
 }
 
 module "storage" {
@@ -16,6 +18,7 @@ module "storage" {
   location             = azurerm_resource_group.rg.location
   storage_account_name = var.storage_account_name
   share_name           = var.share_name
+  tags                 = var.tags
 }
 
 data "archive_file" "app_zip" {
@@ -44,4 +47,5 @@ module "aca" {
   storage_account_key  = module.storage.storage_account_key
   share_name           = module.storage.share_name
   source_zip_filename  = "app.zip"
+  tags                 = var.tags
 }

@@ -18,3 +18,10 @@ env_name = "cae-dev-build"
 
 # Container Apps Job Name
 job_name = "caj-dev-build-image"
+
+# Resource Tags
+tags = {
+  Environment = "Development"
+  Project     = "ACA Java Build"
+  Owner       = "Platform Team"
+}

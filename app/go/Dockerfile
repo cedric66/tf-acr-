@@ -6,4 +6,5 @@ RUN go build -o app main.go
 
 FROM cgr.dev/chainguard/static:latest
 COPY --from=build /work/app /app
+EXPOSE 8080
 CMD ["/app"]

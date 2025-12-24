@@ -25,8 +25,8 @@ resource "azurerm_container_app_job" "build" {
   container_app_environment_id = azurerm_container_app_environment.env.id
   tags                = var.tags
 
-  replica_timeout_seconds = 1800
-  replica_retry_limit     = 0
+  replica_timeout_in_seconds = 1800
+  replica_retry_limit        = 0
   manual_trigger_config {
     parallelism_replica_count = 1
     replica_completion_count  = 1

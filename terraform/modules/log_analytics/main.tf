@@ -7,8 +7,8 @@ resource "azurerm_log_analytics_workspace" "law" {
   tags                = var.tags
 }
 
-resource "azurerm_log_analytics_workspace_table" "container_log" {
+resource "azurerm_log_analytics_workspace_table" "container_app_console_logs" {
   workspace_id = azurerm_log_analytics_workspace.law.id
-  name         = "ContainerLog"
+  name         = "ContainerAppConsoleLogs"
   plan         = "Basic"
 }

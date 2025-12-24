@@ -154,6 +154,28 @@ module "aca_job_node" {
   tags                         = var.tags
 }
 
+# DHI Go Job
+module "aca_job_dhi_go" {
+  source                       = "../../modules/aca_job"
+  job_name                     = "${var.job_name_prefix}-dhi-go"
+  resource_group_name          = azurerm_resource_group.rg.name
+  location                     = azurerm_resource_group.rg.location
+  container_app_environment_id = module.aca_env.id
+  acr_id                       = module.acr.id
+  acr_login_server             = module.acr.login_server
+  acr_username                 = module.acr.admin_username
+  acr_password                 = module.acr.admin_password
+  share_name                   = module.storage.share_name
+  source_zip_filename          = "app.zip"
+  app_subdirectory             = "dhi-go"
+  image_name                   = "my-dhi-go-app"
+  build_args                   = {
+    "BUILD_IMAGE" = "${module.acr.login_server}/golang:1.21-alpine"
+    "RUN_IMAGE"   = "${module.acr.login_server}/distroless/static:nonroot"
+  }
+  tags                         = var.tags
+}
+
 module "budget" {
   source            = "../../modules/budget"
   resource_group_id = azurerm_resource_group.rg.id

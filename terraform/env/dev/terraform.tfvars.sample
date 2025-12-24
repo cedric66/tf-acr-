@@ -41,4 +41,7 @@ images_to_import = {
   "cgr.dev/chainguard/python:latest"= "chainguard/python:latest"
   "cgr.dev/chainguard/node:latest"  = "chainguard/node:latest"
   "busybox:latest"                  = "busybox:latest"
+  "gcr.io/kaniko-project/executor:latest" = "kaniko-project/executor:latest"
+  "golang:1.21-alpine"              = "golang:1.21-alpine"
+  "gcr.io/distroless/static:nonroot" = "distroless/static:nonroot"
 }

@@ -34,14 +34,22 @@ budget_alert_emails = ["admin@example.com"]
 
 # Images to Import to Private ACR (Source -> Dest Tag)
 images_to_import = {
+  # Chainguard Stack
   "maven:3.9-eclipse-temurin-17"    = "maven:3.9-eclipse-temurin-17"
   "cgr.dev/chainguard/jre:latest"   = "chainguard/jre:latest"
   "cgr.dev/chainguard/go:latest"    = "chainguard/go:latest"
   "cgr.dev/chainguard/static:latest"= "chainguard/static:latest"
   "cgr.dev/chainguard/python:latest"= "chainguard/python:latest"
   "cgr.dev/chainguard/node:latest"  = "chainguard/node:latest"
+
+  # Helper Tools
   "busybox:latest"                  = "busybox:latest"
   "gcr.io/kaniko-project/executor:latest" = "kaniko-project/executor:latest"
+
+  # Hardened Stack (Distroless / Alpine)
   "golang:1.21-alpine"              = "golang:1.21-alpine"
   "gcr.io/distroless/static:nonroot" = "distroless/static:nonroot"
+  "gcr.io/distroless/java17-debian12:nonroot" = "distroless/java17-debian12:nonroot"
+  "python:3.11-alpine"              = "python:3.11-alpine"
+  "node:20-alpine"                  = "node:20-alpine"
 }

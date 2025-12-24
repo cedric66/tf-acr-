@@ -154,6 +154,28 @@ module "aca_job_node" {
   tags                         = var.tags
 }
 
+# DHI Java Job
+module "aca_job_dhi_java" {
+  source                       = "../../modules/aca_job"
+  job_name                     = "${var.job_name_prefix}-dhi-java"
+  resource_group_name          = azurerm_resource_group.rg.name
+  location                     = azurerm_resource_group.rg.location
+  container_app_environment_id = module.aca_env.id
+  acr_id                       = module.acr.id
+  acr_login_server             = module.acr.login_server
+  acr_username                 = module.acr.admin_username
+  acr_password                 = module.acr.admin_password
+  share_name                   = module.storage.share_name
+  source_zip_filename          = "app.zip"
+  app_subdirectory             = "dhi-java"
+  image_name                   = "my-dhi-java-app"
+  build_args                   = {
+    "BUILD_IMAGE" = "${module.acr.login_server}/maven:3.9-eclipse-temurin-17"
+    "RUN_IMAGE"   = "${module.acr.login_server}/distroless/java17-debian12:nonroot"
+  }
+  tags                         = var.tags
+}
+
 # DHI Go Job
 module "aca_job_dhi_go" {
   source                       = "../../modules/aca_job"
@@ -172,6 +194,48 @@ module "aca_job_dhi_go" {
   build_args                   = {
     "BUILD_IMAGE" = "${module.acr.login_server}/golang:1.21-alpine"
     "RUN_IMAGE"   = "${module.acr.login_server}/distroless/static:nonroot"
+  }
+  tags                         = var.tags
+}
+
+# DHI Python Job
+module "aca_job_dhi_python" {
+  source                       = "../../modules/aca_job"
+  job_name                     = "${var.job_name_prefix}-dhi-python"
+  resource_group_name          = azurerm_resource_group.rg.name
+  location                     = azurerm_resource_group.rg.location
+  container_app_environment_id = module.aca_env.id
+  acr_id                       = module.acr.id
+  acr_login_server             = module.acr.login_server
+  acr_username                 = module.acr.admin_username
+  acr_password                 = module.acr.admin_password
+  share_name                   = module.storage.share_name
+  source_zip_filename          = "app.zip"
+  app_subdirectory             = "dhi-python"
+  image_name                   = "my-dhi-python-app"
+  build_args                   = {
+    "RUN_IMAGE"   = "${module.acr.login_server}/python:3.11-alpine"
+  }
+  tags                         = var.tags
+}
+
+# DHI Node Job
+module "aca_job_dhi_node" {
+  source                       = "../../modules/aca_job"
+  job_name                     = "${var.job_name_prefix}-dhi-node"
+  resource_group_name          = azurerm_resource_group.rg.name
+  location                     = azurerm_resource_group.rg.location
+  container_app_environment_id = module.aca_env.id
+  acr_id                       = module.acr.id
+  acr_login_server             = module.acr.login_server
+  acr_username                 = module.acr.admin_username
+  acr_password                 = module.acr.admin_password
+  share_name                   = module.storage.share_name
+  source_zip_filename          = "app.zip"
+  app_subdirectory             = "dhi-node"
+  image_name                   = "my-dhi-node-app"
+  build_args                   = {
+    "RUN_IMAGE"   = "${module.acr.login_server}/node:20-alpine"
   }
   tags                         = var.tags
 }

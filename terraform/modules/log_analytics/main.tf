@@ -12,3 +12,9 @@ resource "azurerm_log_analytics_workspace_table" "container_app_console_logs" {
   name         = "ContainerAppConsoleLogs"
   plan         = "Basic"
 }
+
+resource "azurerm_log_analytics_workspace_table" "container_app_system_logs" {
+  workspace_id = azurerm_log_analytics_workspace.law.id
+  name         = "ContainerAppSystemLogs"
+  plan         = "Basic"
+}

@@ -28,8 +28,8 @@ resource "azurerm_container_app_job" "build" {
   replica_timeout_in_seconds = 1800
   replica_retry_limit        = 0
   manual_trigger_config {
-    parallelism_replica_count = 1
-    replica_completion_count  = 1
+    parallelism              = 1
+    replica_completion_count = 1
   }
 
   identity {
@@ -46,6 +46,8 @@ resource "azurerm_container_app_job" "build" {
     container {
       name    = "build-and-push"
       image   = "gcr.io/kaniko-project/executor:latest"
+      cpu     = 0.5
+      memory  = "1Gi"
 
       env {
         name  = "DOCKER_CONFIG"
@@ -67,6 +69,8 @@ resource "azurerm_container_app_job" "build" {
     init_container {
       name    = "setup-workspace"
       image   = "busybox"
+      cpu     = 0.25
+      memory  = "0.5Gi"
 
       # Combined command:
       # 1. Create directories.

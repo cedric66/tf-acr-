@@ -105,6 +105,10 @@ resource "azurerm_container_app_job" "build" {
       storage_name = "azure-file-share"
     }
   }
+
+  depends_on = [
+    azurerm_container_app_environment_storage.mount
+  ]
 }
 
 resource "azurerm_container_app_environment_storage" "mount" {

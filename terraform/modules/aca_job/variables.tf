@@ -54,6 +54,12 @@ variable "image_name" {
   description = "Name of the image to push to ACR"
 }
 
+variable "build_args" {
+  type        = map(string)
+  description = "Build arguments to pass to Kaniko"
+  default     = {}
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

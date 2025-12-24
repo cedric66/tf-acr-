@@ -47,11 +47,16 @@ resource "azurerm_container_app_job" "build" {
         value = "/workspace/.docker"
       }
 
-      args = [
-        "--dockerfile=/workspace/app/${var.app_subdirectory}/Dockerfile",
-        "--context=dir:///workspace/app/${var.app_subdirectory}",
-        "--destination=${var.acr_login_server}/${var.image_name}:latest"
-      ]
+      # Construct args dynamically
+      args = concat(
+        [
+          "--dockerfile=/workspace/app/${var.app_subdirectory}/Dockerfile",
+          "--context=dir:///workspace/app/${var.app_subdirectory}",
+          "--destination=${var.acr_login_server}/${var.image_name}:latest"
+        ],
+        # Add build args
+        [for k, v in var.build_args : "--build-arg=${k}=${v}"]
+      )
 
       volume_mounts {
         name = "source-code"
@@ -65,10 +70,6 @@ resource "azurerm_container_app_job" "build" {
       cpu     = 0.25
       memory  = "0.5Gi"
 
-      # Combined command:
-      # 1. Create directories.
-      # 2. Unzip source.
-      # 3. Create Docker config for Kaniko using credentials.
       command = ["sh", "-c", <<EOT
         mkdir -p /workspace/app
         mkdir -p /workspace/.docker
@@ -101,12 +102,4 @@ resource "azurerm_container_app_job" "build" {
 
   # We can't strictly depend on the environment resource since it's in another module,
   # but we can depend on the environment ID being available.
-  # However, to avoid the deletion ordering issue, we rely on Terraform's graph.
-  # If the user destroys everything, the modules will be destroyed.
-  # To satisfy the "must depend on env" requirement for 409 prevention:
-  # Since the environment resource is not here, we can't reference it directly in `depends_on`.
-  # BUT, we are passing `container_app_environment_id`. That creates an implicit dependency.
-  # The 409 error earlier might have been because of the specific `azurerm` bug where implicit dependency wasn't enough for deletion order of Env vs Job.
-  # If we separate them into modules, `aca_job` module depends on `aca_env` module.
-  # Terraform *should* destroy `aca_job` first.
 }

@@ -1,4 +1,6 @@
-FROM cgr.dev/chainguard/node:latest
+ARG RUN_IMAGE=cgr.dev/chainguard/node:latest
+
+FROM ${RUN_IMAGE}
 
 WORKDIR /app
 COPY app.js .

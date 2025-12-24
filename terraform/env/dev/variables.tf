@@ -68,3 +68,9 @@ variable "budget_alert_emails" {
   description = "List of emails to notify when budget is exceeded"
   type        = list(string)
 }
+
+variable "images_to_import" {
+  description = "Map of images to import to private ACR (Source -> Destination Tag)"
+  type        = map(string)
+  default     = {}
+}

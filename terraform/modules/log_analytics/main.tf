@@ -6,3 +6,9 @@ resource "azurerm_log_analytics_workspace" "law" {
   retention_in_days   = 30
   tags                = var.tags
 }
+
+resource "azurerm_log_analytics_workspace_table" "container_log" {
+  workspace_id = azurerm_log_analytics_workspace.law.id
+  name         = "ContainerLog"
+  plan         = "Basic"
+}

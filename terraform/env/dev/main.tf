@@ -23,7 +23,7 @@ module "storage" {
 
 module "log_analytics" {
   source              = "../../modules/log_analytics"
-  name                = "${var.env_name}-law"
+  name                = var.log_analytics_name
   resource_group_name = azurerm_resource_group.rg.name
   location            = azurerm_resource_group.rg.location
   tags                = var.tags
@@ -56,7 +56,7 @@ module "aca_env" {
 # Java Job
 module "aca_job_java" {
   source                       = "../../modules/aca_job"
-  job_name                     = "${var.job_name}-java"
+  job_name                     = "${var.job_name_prefix}-java"
   resource_group_name          = azurerm_resource_group.rg.name
   location                     = azurerm_resource_group.rg.location
   container_app_environment_id = module.aca_env.id
@@ -74,7 +74,7 @@ module "aca_job_java" {
 # Go Job
 module "aca_job_go" {
   source                       = "../../modules/aca_job"
-  job_name                     = "${var.job_name}-go"
+  job_name                     = "${var.job_name_prefix}-go"
   resource_group_name          = azurerm_resource_group.rg.name
   location                     = azurerm_resource_group.rg.location
   container_app_environment_id = module.aca_env.id
@@ -92,7 +92,7 @@ module "aca_job_go" {
 # Python Job
 module "aca_job_python" {
   source                       = "../../modules/aca_job"
-  job_name                     = "${var.job_name}-python"
+  job_name                     = "${var.job_name_prefix}-python"
   resource_group_name          = azurerm_resource_group.rg.name
   location                     = azurerm_resource_group.rg.location
   container_app_environment_id = module.aca_env.id
@@ -110,7 +110,7 @@ module "aca_job_python" {
 # Node Job
 module "aca_job_node" {
   source                       = "../../modules/aca_job"
-  job_name                     = "${var.job_name}-node"
+  job_name                     = "${var.job_name_prefix}-node"
   resource_group_name          = azurerm_resource_group.rg.name
   location                     = azurerm_resource_group.rg.location
   container_app_environment_id = module.aca_env.id

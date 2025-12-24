@@ -1,5 +1,9 @@
 variable "env_name" {
   type = string
+  validation {
+    condition     = can(regex("^[a-zA-Z0-9-]{2,32}$", var.env_name))
+    error_message = "Container App Environment name must be between 2 and 32 characters and contain only alphanumeric characters and hyphens."
+  }
 }
 
 variable "location" {

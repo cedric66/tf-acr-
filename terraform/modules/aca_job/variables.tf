@@ -1,5 +1,9 @@
 variable "job_name" {
   type = string
+  validation {
+    condition     = can(regex("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", var.job_name))
+    error_message = "Container App Job name must consist of lowercase alphanumeric characters or hyphens, start and end with an alphanumeric character, and be less than 32 characters."
+  }
 }
 
 variable "location" {

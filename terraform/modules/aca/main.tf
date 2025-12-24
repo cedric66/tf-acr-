@@ -108,6 +108,7 @@ resource "azurerm_container_app_job" "build" {
   }
 
   depends_on = [
+    azurerm_container_app_environment.env,
     azurerm_container_app_environment_storage.mount
   ]
 }

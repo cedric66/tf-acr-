@@ -1,4 +1,4 @@
-variable "resource_group_name" {
+variable "job_name" {
   type = string
 }
 
@@ -6,11 +6,11 @@ variable "location" {
   type = string
 }
 
-variable "env_name" {
+variable "resource_group_name" {
   type = string
 }
 
-variable "job_name" {
+variable "container_app_environment_id" {
   type = string
 }
 
@@ -32,14 +32,6 @@ variable "acr_password" {
   sensitive = true
 }
 
-variable "storage_account_name" {
-  type = string
-}
-
-variable "storage_account_key" {
-  type = string
-}
-
 variable "share_name" {
   type = string
 }
@@ -48,8 +40,14 @@ variable "source_zip_filename" {
   type = string
 }
 
-variable "log_analytics_workspace_id" {
+variable "app_subdirectory" {
   type = string
+  description = "Subdirectory in the app folder (e.g. java, go, python)"
+}
+
+variable "image_name" {
+  type = string
+  description = "Name of the image to push to ACR"
 }
 
 variable "tags" {

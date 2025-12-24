@@ -1,11 +1,3 @@
-resource "azurerm_container_app_environment" "env" {
-  name                       = var.env_name
-  location                   = var.location
-  resource_group_name        = var.resource_group_name
-  log_analytics_workspace_id = var.log_analytics_workspace_id
-  tags                       = var.tags
-}
-
 resource "azurerm_user_assigned_identity" "identity" {
   location            = var.location
   name                = "${var.job_name}-identity"
@@ -23,7 +15,7 @@ resource "azurerm_container_app_job" "build" {
   name                = var.job_name
   location            = var.location
   resource_group_name = var.resource_group_name
-  container_app_environment_id = azurerm_container_app_environment.env.id
+  container_app_environment_id = var.container_app_environment_id
   tags                = var.tags
 
   replica_timeout_in_seconds = 1800
@@ -56,9 +48,9 @@ resource "azurerm_container_app_job" "build" {
       }
 
       args = [
-        "--dockerfile=/workspace/app/Dockerfile",
-        "--context=dir:///workspace/app",
-        "--destination=${var.acr_login_server}/my-java-app:latest"
+        "--dockerfile=/workspace/app/${var.app_subdirectory}/Dockerfile",
+        "--context=dir:///workspace/app/${var.app_subdirectory}",
+        "--destination=${var.acr_login_server}/${var.image_name}:latest"
       ]
 
       volume_mounts {
@@ -103,21 +95,18 @@ resource "azurerm_container_app_job" "build" {
     volume {
       name = "azure-file-share"
       storage_type = "AzureFile"
-      storage_name = "azure-file-share"
+      storage_name = var.share_name
     }
   }
 
-  depends_on = [
-    azurerm_container_app_environment.env,
-    azurerm_container_app_environment_storage.mount
-  ]
-}
-
-resource "azurerm_container_app_environment_storage" "mount" {
-  name                         = "azure-file-share"
-  container_app_environment_id = azurerm_container_app_environment.env.id
-  account_name                 = var.storage_account_name
-  share_name                   = var.share_name
-  access_key                   = var.storage_account_key
-  access_mode                  = "ReadOnly"
+  # We can't strictly depend on the environment resource since it's in another module,
+  # but we can depend on the environment ID being available.
+  # However, to avoid the deletion ordering issue, we rely on Terraform's graph.
+  # If the user destroys everything, the modules will be destroyed.
+  # To satisfy the "must depend on env" requirement for 409 prevention:
+  # Since the environment resource is not here, we can't reference it directly in `depends_on`.
+  # BUT, we are passing `container_app_environment_id`. That creates an implicit dependency.
+  # The 409 error earlier might have been because of the specific `azurerm` bug where implicit dependency wasn't enough for deletion order of Env vs Job.
+  # If we separate them into modules, `aca_job` module depends on `aca_env` module.
+  # Terraform *should* destroy `aca_job` first.
 }

@@ -41,22 +41,88 @@ resource "azurerm_storage_share_file" "source_code" {
   source           = data.archive_file.app_zip.output_path
 }
 
-module "aca" {
-  source              = "../../modules/aca"
-  resource_group_name = azurerm_resource_group.rg.name
-  location            = azurerm_resource_group.rg.location
-  env_name            = var.env_name
-  job_name            = var.job_name
-  acr_id              = module.acr.id
-  acr_login_server    = module.acr.login_server
-  acr_username        = module.acr.admin_username
-  acr_password        = module.acr.admin_password
-  storage_account_name = module.storage.storage_account_name
-  storage_account_key  = module.storage.storage_account_key
-  share_name           = module.storage.share_name
-  source_zip_filename  = "app.zip"
+module "aca_env" {
+  source                     = "../../modules/aca_env"
+  env_name                   = var.env_name
+  resource_group_name        = azurerm_resource_group.rg.name
+  location                   = azurerm_resource_group.rg.location
   log_analytics_workspace_id = module.log_analytics.id
-  tags                 = var.tags
+  storage_account_name       = module.storage.storage_account_name
+  storage_account_key        = module.storage.storage_account_key
+  share_name                 = module.storage.share_name
+  tags                       = var.tags
+}
+
+# Java Job
+module "aca_job_java" {
+  source                       = "../../modules/aca_job"
+  job_name                     = "${var.job_name}-java"
+  resource_group_name          = azurerm_resource_group.rg.name
+  location                     = azurerm_resource_group.rg.location
+  container_app_environment_id = module.aca_env.id
+  acr_id                       = module.acr.id
+  acr_login_server             = module.acr.login_server
+  acr_username                 = module.acr.admin_username
+  acr_password                 = module.acr.admin_password
+  share_name                   = module.storage.share_name
+  source_zip_filename          = "app.zip"
+  app_subdirectory             = "java"
+  image_name                   = "my-java-app"
+  tags                         = var.tags
+}
+
+# Go Job
+module "aca_job_go" {
+  source                       = "../../modules/aca_job"
+  job_name                     = "${var.job_name}-go"
+  resource_group_name          = azurerm_resource_group.rg.name
+  location                     = azurerm_resource_group.rg.location
+  container_app_environment_id = module.aca_env.id
+  acr_id                       = module.acr.id
+  acr_login_server             = module.acr.login_server
+  acr_username                 = module.acr.admin_username
+  acr_password                 = module.acr.admin_password
+  share_name                   = module.storage.share_name
+  source_zip_filename          = "app.zip"
+  app_subdirectory             = "go"
+  image_name                   = "my-go-app"
+  tags                         = var.tags
+}
+
+# Python Job
+module "aca_job_python" {
+  source                       = "../../modules/aca_job"
+  job_name                     = "${var.job_name}-python"
+  resource_group_name          = azurerm_resource_group.rg.name
+  location                     = azurerm_resource_group.rg.location
+  container_app_environment_id = module.aca_env.id
+  acr_id                       = module.acr.id
+  acr_login_server             = module.acr.login_server
+  acr_username                 = module.acr.admin_username
+  acr_password                 = module.acr.admin_password
+  share_name                   = module.storage.share_name
+  source_zip_filename          = "app.zip"
+  app_subdirectory             = "python"
+  image_name                   = "my-python-app"
+  tags                         = var.tags
+}
+
+# Node Job
+module "aca_job_node" {
+  source                       = "../../modules/aca_job"
+  job_name                     = "${var.job_name}-node"
+  resource_group_name          = azurerm_resource_group.rg.name
+  location                     = azurerm_resource_group.rg.location
+  container_app_environment_id = module.aca_env.id
+  acr_id                       = module.acr.id
+  acr_login_server             = module.acr.login_server
+  acr_username                 = module.acr.admin_username
+  acr_password                 = module.acr.admin_password
+  share_name                   = module.storage.share_name
+  source_zip_filename          = "app.zip"
+  app_subdirectory             = "node"
+  image_name                   = "my-node-app"
+  tags                         = var.tags
 }
 
 module "budget" {

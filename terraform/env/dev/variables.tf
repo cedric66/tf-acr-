@@ -38,3 +38,8 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "budget_alert_emails" {
+  description = "List of emails to notify when budget is exceeded"
+  type        = list(string)
+}

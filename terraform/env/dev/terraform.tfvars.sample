@@ -25,3 +25,6 @@ tags = {
   Project     = "ACA Java Build"
   Owner       = "Platform Team"
 }
+
+# Budget Alert Emails
+budget_alert_emails = ["admin@example.com"]

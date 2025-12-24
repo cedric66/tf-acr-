@@ -21,6 +21,14 @@ module "storage" {
   tags                 = var.tags
 }
 
+module "log_analytics" {
+  source              = "../../modules/log_analytics"
+  name                = "${var.env_name}-law"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+  tags                = var.tags
+}
+
 data "archive_file" "app_zip" {
   type        = "zip"
   source_dir  = "${path.module}/../../../app"
@@ -47,5 +55,12 @@ module "aca" {
   storage_account_key  = module.storage.storage_account_key
   share_name           = module.storage.share_name
   source_zip_filename  = "app.zip"
+  log_analytics_workspace_id = module.log_analytics.id
   tags                 = var.tags
+}
+
+module "budget" {
+  source            = "../../modules/budget"
+  resource_group_id = azurerm_resource_group.rg.id
+  contact_emails    = var.budget_alert_emails
 }

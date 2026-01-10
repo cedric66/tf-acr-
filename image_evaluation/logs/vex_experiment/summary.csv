@@ -1,0 +1,5 @@
+Tool,Image,WithVEX,High,Critical,Medium,Low,Notes
+Docker Scout,dhi.io/python:3-debian13-sfw-ent-dev,Yes,0,0,1,19,Native
+Grype+VEX,dhi.io/python:3-debian13-sfw-ent-dev,Yes,       0,       0,       0,       0,Using Syft SBOM + Scout VEX
+Grype,dhi.io/python:3-debian13-sfw-ent-dev,No,      14,       4,      70,      26,Vanilla scan
+Trivy,dhi.io/python:3-debian13-sfw-ent-dev,Default,       0,       0,       0,       0,Standard scan

@@ -1,0 +1,45 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile.chainguard
+#1 transferring dockerfile: 391B 0.0s done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for cgr.dev/chainguard/python:latest
+#2 DONE 1.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [1/5] FROM cgr.dev/chainguard/python:latest@sha256:66a97fc45cfec264f1a42ec378af8f168667eb47e501dc2c2b5883f920a5827c
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 360B done
+#5 DONE 0.1s
+
+#6 [2/5] WORKDIR /app
+#6 CACHED
+
+#7 [3/5] COPY apps/python/requirements.txt .
+#7 CACHED
+
+#8 [4/5] COPY apps/python/app.py .
+#8 CACHED
+
+#9 [5/5] RUN pip install -r requirements.txt || echo "Skipping pip install - attempting usage of pre-installed site-packages if available"
+#9 0.503 runc run failed: unable to start container process: error during container init: exec: "/bin/sh": stat /bin/sh: no such file or directory
+#9 ERROR: process "/bin/sh -c pip install -r requirements.txt || echo \"Skipping pip install - attempting usage of pre-installed site-packages if available\"" did not complete successfully: exit code: 1
+------
+ > [5/5] RUN pip install -r requirements.txt || echo "Skipping pip install - attempting usage of pre-installed site-packages if available":
+0.503 runc run failed: unable to start container process: error during container init: exec: "/bin/sh": stat /bin/sh: no such file or directory
+------
+Dockerfile.chainguard:7
+--------------------
+   5 |     COPY apps/python/app.py .
+   6 |     # Try pip install, might fail on distroless/minimal without build tools
+   7 | >>> RUN pip install -r requirements.txt || echo "Skipping pip install - attempting usage of pre-installed site-packages if available"
+   8 |     CMD ["python", "app.py"]
+   9 |     
+--------------------
+ERROR: failed to solve: process "/bin/sh -c pip install -r requirements.txt || echo \"Skipping pip install - attempting usage of pre-installed site-packages if available\"" did not complete successfully: exit code: 1

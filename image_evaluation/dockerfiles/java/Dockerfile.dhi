@@ -1,0 +1,10 @@
+
+FROM dhi.io/amazoncorretto:8-alpine3.22-dev AS builder
+WORKDIR /app
+COPY apps/java/Main.java .
+RUN javac Main.java
+
+FROM dhi.io/amazoncorretto:8-alpine3.22-dev
+WORKDIR /app
+COPY --from=builder /app/Main.class .
+CMD ["java", "Main"]

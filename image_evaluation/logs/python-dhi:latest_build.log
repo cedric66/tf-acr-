@@ -1,0 +1,40 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile.dhi
+#1 transferring dockerfile: 253B 0.0s done
+#1 DONE 0.1s
+
+#2 [auth] python:pull token for dhi.io
+#2 DONE 0.0s
+
+#3 [internal] load metadata for dhi.io/python:3-debian13-sfw-ent-dev
+#3 DONE 4.2s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 2B 0.0s done
+#4 DONE 0.1s
+
+#5 [1/5] FROM dhi.io/python:3-debian13-sfw-ent-dev@sha256:be163680146c833ba6af726fb7ca22dfe558891ff0d0bcaf58c34fdbd791b040
+#5 DONE 0.0s
+
+#6 [internal] load build context
+#6 transferring context: 142B 0.0s done
+#6 DONE 0.1s
+
+#7 [2/5] WORKDIR /app
+#7 CACHED
+
+#8 [3/5] COPY apps/python/requirements.txt .
+#8 CACHED
+
+#9 [4/5] COPY apps/python/app.py .
+#9 CACHED
+
+#10 [5/5] RUN pip install -r requirements.txt || echo "Skipping pip install"
+#10 CACHED
+
+#11 exporting to image
+#11 exporting layers done
+#11 writing image sha256:1da64a7454954685efa6853336e2eea541ed9ada998764222e6e40fc1126e81f done
+#11 naming to docker.io/library/python-dhi:latest 0.0s done
+#11 DONE 0.0s

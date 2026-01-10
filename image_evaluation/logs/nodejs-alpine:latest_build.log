@@ -1,0 +1,46 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile.alpine
+#1 DONE 0.0s
+
+#1 [internal] load build definition from Dockerfile.alpine
+#1 transferring dockerfile: 289B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/node:18-alpine
+#2 ...
+
+#3 [auth] library/node:pull token for registry-1.docker.io
+#3 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/node:18-alpine
+#2 DONE 12.5s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 2B done
+#4 DONE 0.0s
+
+#5 [1/5] FROM docker.io/library/node:18-alpine@sha256:8d6421d663b4c28fd3ebc498332f249011d118945588d0a35cb9bc4b8ca09d9e
+#5 DONE 0.0s
+
+#6 [internal] load build context
+#6 transferring context: 142B done
+#6 DONE 0.0s
+
+#7 [2/5] WORKDIR /app
+#7 CACHED
+
+#8 [3/5] COPY apps/nodejs/package.json .
+#8 CACHED
+
+#9 [4/5] COPY apps/nodejs/server.js .
+#9 CACHED
+
+#10 [5/5] RUN npm install || echo "Skipping npm install"
+#10 CACHED
+
+#11 exporting to image
+#11 exporting layers done
+#11 writing image sha256:fa08f3097492bece664edb3bf8a46747916d9e9fb1b1a564ca79f85007e2cac0 0.0s done
+#11 naming to docker.io/library/nodejs-alpine:latest done
+#11 DONE 0.0s

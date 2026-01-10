@@ -97,9 +97,8 @@ resource "azurerm_container_app_job" "build" {
       name = "azure-file-share"
       storage_type = "AzureFile"
       storage_name = var.share_name
-    }
   }
 
-  # We can't strictly depend on the environment resource since it's in another module,
-  # but we can depend on the environment ID being available.
+  # Ensure role assignment is completed before job can execute
+  depends_on = [azurerm_role_assignment.acr_push]
 }

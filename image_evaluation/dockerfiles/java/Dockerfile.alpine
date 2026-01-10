@@ -1,0 +1,10 @@
+
+FROM eclipse-temurin:17-alpine AS builder
+WORKDIR /app
+COPY apps/java/Main.java .
+RUN javac Main.java
+
+FROM eclipse-temurin:17-alpine
+WORKDIR /app
+COPY --from=builder /app/Main.class .
+CMD ["java", "Main"]

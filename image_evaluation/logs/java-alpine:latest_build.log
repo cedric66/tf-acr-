@@ -1,0 +1,43 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile.alpine
+#1 transferring dockerfile: 253B 0.0s done
+#1 DONE 0.1s
+
+#2 [internal] load metadata for docker.io/library/eclipse-temurin:17-alpine
+#2 ...
+
+#3 [auth] library/eclipse-temurin:pull token for registry-1.docker.io
+#3 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/eclipse-temurin:17-alpine
+#2 DONE 3.8s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 2B 0.0s done
+#4 DONE 0.1s
+
+#5 [builder 1/4] FROM docker.io/library/eclipse-temurin:17-alpine@sha256:eaf56b7430cee6c93871106367715e2675192093d8f67dbbdbe07136f7cfae60
+#5 DONE 0.0s
+
+#6 [internal] load build context
+#6 transferring context: 94B done
+#6 DONE 0.0s
+
+#7 [builder 2/4] WORKDIR /app
+#7 CACHED
+
+#8 [builder 3/4] COPY apps/java/Main.java .
+#8 CACHED
+
+#9 [builder 4/4] RUN javac Main.java
+#9 CACHED
+
+#10 [stage-1 3/3] COPY --from=builder /app/Main.class .
+#10 CACHED
+
+#11 exporting to image
+#11 exporting layers done
+#11 writing image sha256:f76dcbfe28416cbe3717a97ca06ffcbfd85a196733c6e8ad35093eba456d9fea done
+#11 naming to docker.io/library/java-alpine:latest 0.0s done
+#11 DONE 0.1s

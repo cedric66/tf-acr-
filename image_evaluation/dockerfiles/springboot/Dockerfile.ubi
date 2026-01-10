@@ -1,0 +1,11 @@
+
+FROM maven:3.8-openjdk-17-slim AS builder
+WORKDIR /app
+COPY apps/springboot/pom.xml .
+COPY apps/springboot/src ./src
+RUN mvn package -DskipTests
+
+FROM registry.access.redhat.com/ubi9/openjdk-17
+WORKDIR /app
+COPY --from=builder /app/target/*.jar app.jar
+CMD ["java", "-jar", "app.jar"]

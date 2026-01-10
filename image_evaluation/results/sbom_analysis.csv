@@ -1,0 +1,7 @@
+Provider,ImageName,SBOM_Packages,SBOM_Format
+chainguard,cgr.dev/chainguard/jdk:latest,6099,spdx-json
+chainguard-dev,cgr.dev/chainguard/jdk:latest-dev,8669,spdx-json
+minimus,reg.mini.dev/openjdk:17,6965,spdx-json
+minimus-dev,reg.mini.dev/openjdk:17-dev,12055,spdx-json
+dhi,dhi.io/amazoncorretto:8-alpine3.22-dev,267,spdx-json
+ubi,registry.access.redhat.com/ubi8/openjdk-17:latest,27815,spdx-json

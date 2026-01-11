@@ -1,5 +1,0 @@
-App,SourceProvider,TargetProvider,Migration_Method,Success,Notes
-nodejs,alpine,chainguard,dfc_tool,SUCCESS,See image_evaluation/logs/migration/dfc_nodejs_alpine.txt
-springboot,alpine,chainguard,dfc_tool,SUCCESS,See image_evaluation/logs/migration/dfc_springboot_alpine.txt
-go,alpine,chainguard,dfc_tool,SUCCESS,See image_evaluation/logs/migration/dfc_go_alpine.txt
-python,alpine,chainguard,dfc_tool,SUCCESS,See image_evaluation/logs/migration/dfc_python_alpine.txt

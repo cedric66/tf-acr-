@@ -1,9 +1,0 @@
-FROM reg.mini.dev/go:1.20 AS builder
-WORKDIR /app
-COPY apps/go/main.go .
-RUN CGO_ENABLED=0 go build -o /app/hello main.go
-
-# Minimal runtime
-FROM reg.mini.dev/base
-COPY --from=builder /app/hello /hello
-CMD ["/hello"]

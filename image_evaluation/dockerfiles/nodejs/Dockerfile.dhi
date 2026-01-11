@@ -1,7 +1,0 @@
-
-FROM dhi.io/node:25-debian13-sfw-ent-dev
-WORKDIR /app
-COPY apps/nodejs/package.json .
-COPY apps/nodejs/server.js .
-RUN npm install || echo "Skipping npm install"
-CMD ["node", "server.js"]

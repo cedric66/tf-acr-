@@ -1,7 +1,0 @@
-
-FROM dhi.io/python:3-debian13-sfw-ent-dev
-WORKDIR /app
-COPY apps/python/requirements.txt .
-COPY apps/python/app.py .
-RUN pip install -r requirements.txt || echo "Skipping pip install"
-CMD ["python", "app.py"]

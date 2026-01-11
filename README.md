@@ -2,17 +2,23 @@
 
 This repository contains encrypted content.
 
-## Contents
-
-All sensitive files and directories have been encrypted with AES-256-CBC encryption.
-
 ## How to Decrypt
 
+The decryption script is in the `decrypt-tools` branch:
+
 ```bash
-./scripts/decrypt-repo.sh <password>
+# Get the decrypt script
+git checkout decrypt-tools
+cp scripts/decrypt-repo.sh /tmp/
+
+# Return to this branch
+git checkout feature/aca-java-build-17099716206204415901
+
+# Decrypt
+/tmp/decrypt-repo.sh <password>
 ```
 
-## Encrypted Items
+## Encrypted Contents
 
 - `image_evaluation/` - Container image evaluation results
 - `terraform/` - Infrastructure as Code

@@ -325,6 +325,7 @@ Compliance data? → NO
 | [SRE Runbook](./docs/SRE_OPERATIONAL_RUNBOOK.md) | SRE | Operations & incidents |
 | [DevOps Guide](./docs/DEVOPS_TEAM_GUIDE.md) | App Teams | Deployment & migration |
 | [Fleet Rollout Strategy](./docs/FLEET_ROLLOUT_STRATEGY.md) | Architect/Director | 300+ Cluster Rollout Plan |
+| [Gap Analysis](./docs/GAP_ANALYSIS_300_CLUSTERS.md) | All Teams | Critical Gaps & Missing Scenarios |
 
 ---
 

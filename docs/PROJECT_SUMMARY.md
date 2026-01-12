@@ -324,7 +324,7 @@ Compliance data? → NO
 | [Security](./docs/SECURITY_ASSESSMENT.md) | InfoSec | Threat model & compliance |
 | [SRE Runbook](./docs/SRE_OPERATIONAL_RUNBOOK.md) | SRE | Operations & incidents |
 | [DevOps Guide](./docs/DEVOPS_TEAM_GUIDE.md) | App Teams | Deployment & migration |
-| [Scalability Review](./docs/SCALABILITY_REVIEW_300_PLUS_NODES.md) | Architect | 300+ Node Scaling Analysis |
+| [Fleet Rollout Strategy](./docs/FLEET_ROLLOUT_STRATEGY.md) | Architect/Director | 300+ Cluster Rollout Plan |
 
 ---
 

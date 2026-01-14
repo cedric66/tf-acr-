@@ -1,0 +1,33 @@
+# Azure Subscription ID
+subscription_id = "00000000-0000-0000-0000-000000000000"
+
+# Resource Group (must already exist)
+resource_group_name = "your-existing-rg"
+
+# Region
+location = "East US"
+
+# VM Configuration
+vm_size     = "Standard_B2s"
+enable_spot = false # Set to true to use Spot Instance (cost savings, but can be evicted)
+
+# Networking (Optional)
+# If provided, VM attaches to existing subnet. If omitted, a new VNet/Subnet is created.
+# subnet_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/your-rg/providers/Microsoft.Network/virtualNetworks/your-vnet/subnets/your-subnet"
+
+# Storage Account Details for Cloud Drive
+# These must match your existing Azure Storage Account
+storage_account_name = "your_storage_account_name"
+storage_account_rg   = "your_storage_account_resource_group"
+file_share_name      = "your_file_share_name"
+
+# SSH Key Paths (Optional, defaults shown below)
+# ssh_key_sk_path = "../../../keys/sk.pub"
+# ssh_key_vk_path = "../../../keys/vk.pub"
+
+# Additional Tags (optional, will override defaults if keys conflict)
+# tags = {
+#   environment = "staging"     # Override default "dev"
+#   cost_center = "12345"       # Add new tag
+#   project     = "aks-hardening"
+# }

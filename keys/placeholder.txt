@@ -1,0 +1,13 @@
+Please place the public SSH keys in this directory.
+
+1. Generate keys if you haven't:
+   ssh-keygen -t rsa -b 4096 -f sk_key
+   ssh-keygen -t rsa -b 4096 -f vk_key
+
+2. Rename or copy the public keys here:
+   cp sk_key.pub keys/sk.pub
+   cp vk_key.pub keys/vk.pub
+
+The Terraform configuration expects them at:
+- keys/sk.pub
+- keys/vk.pub

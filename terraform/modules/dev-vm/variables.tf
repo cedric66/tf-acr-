@@ -74,9 +74,15 @@ variable "tags" {
 }
 
 variable "timezone" {
-  description = "Timezone for auto-shutdown schedule"
+  description = "Timezone for auto-shutdown schedule (Windows format, e.g., 'Singapore Standard Time')"
   type        = string
   default     = "Singapore Standard Time"
+}
+
+variable "timezone_iana" {
+  description = "Timezone for automation schedule (IANA/Olson format, e.g., 'Asia/Singapore')"
+  type        = string
+  default     = "Asia/Singapore"
 }
 
 variable "enable_auto_start" {

@@ -5,7 +5,7 @@ package_upgrade: true
 users:
   - default
   - name: ${vk_username}
-    groups: sudo, docker
+    groups: sudo
     shell: /bin/bash
     sudo: ['ALL=(ALL) NOPASSWD:ALL']
     ssh_authorized_keys:
@@ -28,6 +28,7 @@ packages:
   - tree
   - ncdu
   - unzip
+  - bash-completion
 
 write_files:
   - path: /etc/smbcredentials/${storage_account_name}.cred
@@ -36,6 +37,7 @@ write_files:
     content: |
       username=${storage_account_name}
       password=${storage_account_key}
+
   - path: /etc/profile.d/clouddrive_env.sh
     owner: root:root
     permissions: '0755'
@@ -74,7 +76,7 @@ write_files:
       RESET='\[\033[00m\]'
 
       # Prompt Construction
-      export PS1="${GREEN}\u@\h${RESET}:${BLUE}\w${RESET}${RED}\$(parse_git_branch)${RESET} [${PURPLE}\$(get_az_sub)${RESET}|${PURPLE}\$(get_aks_context)${RESET}]\n$ "
+      export PS1="$${RED}\u@\h$${RESET}:$${BLUE}\w$${RESET}$${GREEN}\$(parse_git_branch)$${RESET} [$${PURPLE}\$(get_az_sub)$${RESET}|$${PURPLE}\$(get_aks_context)$${RESET}]\n$ "
 
       # Aliases
       alias k='kubectl'
@@ -83,10 +85,12 @@ write_files:
       alias kgn='kubectl get nodes'
       alias tf='terraform'
 
-      # Completion
-      source <(kubectl completion bash)
-      complete -F __start_kubectl k
-      source /etc/bash_completion
+      # Completion (check if files exist before sourcing)
+      if command -v kubectl &> /dev/null; then
+        source <(kubectl completion bash)
+        complete -F __start_kubectl k
+      fi
+      [ -f /etc/bash_completion ] && source /etc/bash_completion
 
   # Script: List Subscriptions
   - path: /usr/local/bin/list-subscriptions
@@ -104,10 +108,10 @@ write_files:
     content: |
       #!/bin/bash
       echo "Scanning all subscriptions for AKS clusters..."
-      subs=$(az account list --query "[].id" -o tsv)
-      for sub in $subs; do
-        echo "Checking subscription: $sub"
-        az account set --subscription $sub
+      subs=$$(az account list --query "[].id" -o tsv)
+      for sub in $$subs; do
+        echo "Checking subscription: $$sub"
+        az account set --subscription $$sub
         az aks list --output table
       done
 
@@ -117,100 +121,30 @@ write_files:
     permissions: '0755'
     content: |
       #!/bin/bash
-      CLUSTER_NAME=$1
-      RESOURCE_GROUP=$2
+      CLUSTER_NAME=$$1
+      RESOURCE_GROUP=$$2
 
-      if [ -z "$CLUSTER_NAME" ] || [ -z "$RESOURCE_GROUP" ]; then
+      if [ -z "$$CLUSTER_NAME" ] || [ -z "$$RESOURCE_GROUP" ]; then
         echo "Usage: get-aks-details <cluster-name> <resource-group>"
         exit 1
       fi
 
       echo "=========================================="
-      echo "AKS Report for: $CLUSTER_NAME ($RESOURCE_GROUP)"
+      echo "AKS Report for: $$CLUSTER_NAME ($$RESOURCE_GROUP)"
       echo "=========================================="
 
       echo "[Network Profile]"
-      az aks show --name $CLUSTER_NAME --resource-group $RESOURCE_GROUP --query "networkProfile" --output json
+      az aks show --name $$CLUSTER_NAME --resource-group $$RESOURCE_GROUP --query "networkProfile" --output json
 
       echo ""
       echo "[Node Pools & Counts]"
-      az aks nodepool list --cluster-name $CLUSTER_NAME --resource-group $RESOURCE_GROUP --output table
+      az aks nodepool list --cluster-name $$CLUSTER_NAME --resource-group $$RESOURCE_GROUP --output table
 
       echo ""
       echo "[Identity]"
-      az aks show --name $CLUSTER_NAME --resource-group $RESOURCE_GROUP --query "identity" --output json
+      az aks show --name $$CLUSTER_NAME --resource-group $$RESOURCE_GROUP --query "identity" --output json
 
-runcmd:
-  # Install Docker
-  - install -m 0755 -d /etc/apt/keyrings
-  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-  - chmod a+r /etc/apt/keyrings/docker.gpg
-  - echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-  - apt-get update
-  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-
-  # Install Azure CLI
-  - curl -sL https://aka.ms/InstallAzureCLIDeb | bash
-
-  # Install Terraform
-  - wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
-  - echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/hashicorp.list
-  - apt-get update
-  - apt-get install -y terraform
-
-  # Install Kubectl
-  - curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.29/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-  - echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.29/deb/ /' | tee /etc/apt/sources.list.d/kubernetes.list
-  - apt-get update
-  - apt-get install -y kubectl
-
-  # Install Helm
-  - curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-
-  # Install Trivy
-  - wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor | tee /usr/share/keyrings/trivy.gpg > /dev/null
-  - echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | tee /etc/apt/sources.list.d/trivy.list
-  - apt-get update
-  - apt-get install -y trivy
-
-  # Install Grype & Syft (Anchore)
-  - curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
-  - curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
-
-  # Install Kubectx & Kubens
-  - wget https://github.com/ahmetb/kubectx/releases/latest/download/kubectx -O /usr/local/bin/kubectx
-  - wget https://github.com/ahmetb/kubectx/releases/latest/download/kubens -O /usr/local/bin/kubens
-  - chmod +x /usr/local/bin/kubectx /usr/local/bin/kubens
-
-  # Install k9s
-  - curl -sS https://webinstall.dev/k9s | bash
-
-  # Install yq (YAML processor)
-  - wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
-  - chmod +x /usr/local/bin/yq
-
-  # Install Cosign (container signing)
-  - curl -sSfL https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64 -o /usr/local/bin/cosign
-  - chmod +x /usr/local/bin/cosign
-
-  # Install crane (container registry tool)
-  - curl -sSfL https://github.com/google/go-containerregistry/releases/latest/download/go-containerregistry_Linux_x86_64.tar.gz | tar -xz -C /usr/local/bin crane
-
-  # Install skopeo
-  - apt-get install -y skopeo
-
-  # Install GitHub CLI
-  - curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-  - chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
-  - echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list
-  - apt-get update
-  - apt-get install -y gh
-
-  # Install Kustomize
-  - curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
-  - mv kustomize /usr/local/bin/
-
-  # Script: Update CreationDate Tag
+  # Script: Update CreationDate Tag (MOVED from runcmd - was causing parse errors)
   - path: /usr/local/bin/update-creation-date
     owner: root:root
     permissions: '0755'
@@ -220,35 +154,154 @@ runcmd:
       
       RESOURCE_GROUP="${resource_group_name}"
       VM_NAME="${vm_name}"
-      TIMESTAMP=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+      TIMESTAMP=$$(date -u +'%Y-%m-%dT%H:%M:%SZ')
 
-      echo "Updating CreationDate tag for $VM_NAME in $RESOURCE_GROUP to $TIMESTAMP..."
+      echo "Updating CreationDate tag for $$VM_NAME in $$RESOURCE_GROUP to $$TIMESTAMP..."
 
       # Login with Managed Identity
       az login --identity
 
       # Update Tag
       az vm update \
-        --resource-group "$RESOURCE_GROUP" \
-        --name "$VM_NAME" \
-        --set "tags.CreationDate=$TIMESTAMP"
+        --resource-group "$$RESOURCE_GROUP" \
+        --name "$$VM_NAME" \
+        --set "tags.CreationDate=$$TIMESTAMP"
 
       echo "Tag updated successfully."
 
-  # User sk setup
+  # Script: Check Cloud Drive Mount
+  - path: /usr/local/bin/check-clouddrive
+    owner: root:root
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      for USER_HOME in /home/${sk_username} /home/${vk_username}; do
+        MOUNT_POINT="$$USER_HOME/clouddrive"
+        if [ -d "$$MOUNT_POINT" ] && ! mountpoint -q "$$MOUNT_POINT"; then
+          echo "$$(date): $$MOUNT_POINT is not mounted. Attempting remount..." >> /var/log/clouddrive-check.log
+          mount -a
+        fi
+      done
+
+  # Script: Check Disk Usage
+  - path: /usr/local/bin/check-disk-usage
+    owner: root:root
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      THRESHOLD=80
+      USAGE=$$(df / | tail -1 | awk '{print $$5}' | sed 's/%//')
+      TIMESTAMP=$$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+      
+      if [ "$$USAGE" -gt "$$THRESHOLD" ]; then
+        MSG="[DISK ALERT] $$TIMESTAMP: Root disk usage is at $${USAGE}% (threshold: $${THRESHOLD}%)"
+        echo "$$MSG" >> /var/log/disk-usage-alert.log
+        # Broadcast to logged-in users
+        wall "$$MSG"
+        # Also log to syslog for potential external monitoring
+        logger -p user.warning "$$MSG"
+      fi
+
+runcmd:
+  # Install Docker
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+  - chmod a+r /etc/apt/keyrings/docker.gpg
+  - echo "deb [arch=$$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $$(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+  - apt-get update
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  - systemctl enable docker
+  - systemctl start docker
+
+  # Add users to docker group AFTER Docker is installed (docker group now exists)
   - usermod -aG docker ${sk_username} || true
+  - usermod -aG docker ${vk_username} || true
+
+  # Install Azure CLI
+  - curl -sL https://aka.ms/InstallAzureCLIDeb | bash
+
+  # Install Terraform
+  - wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | tee /usr/share/keyrings/hashicorp-archive-keyring.gpg > /dev/null
+  - echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $$(lsb_release -cs) main" | tee /etc/apt/sources.list.d/hashicorp.list
+  - apt-get update
+  - apt-get install -y terraform
+
+  # Install Kubectl
+  - curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.29/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+  - chmod a+r /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+  - echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.29/deb/ /' | tee /etc/apt/sources.list.d/kubernetes.list
+  - apt-get update
+  - apt-get install -y kubectl
+
+  # Install Helm
+  - curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+  # Install Trivy
+  - wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor | tee /usr/share/keyrings/trivy.gpg > /dev/null
+  - echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $$(lsb_release -sc) main" | tee /etc/apt/sources.list.d/trivy.list
+  - apt-get update
+  - apt-get install -y trivy
+
+  # Install Grype & Syft (Anchore)
+  - curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
+  - curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+
+  # Install Kubectx & Kubens
+  - wget -q https://github.com/ahmetb/kubectx/releases/latest/download/kubectx -O /usr/local/bin/kubectx
+  - wget -q https://github.com/ahmetb/kubectx/releases/latest/download/kubens -O /usr/local/bin/kubens
+  - chmod +x /usr/local/bin/kubectx /usr/local/bin/kubens
+
+  # Install k9s (using direct binary download instead of webinstall.dev)
+  - |
+    K9S_VERSION=$$(curl -s https://api.github.com/repos/derailed/k9s/releases/latest | grep tag_name | cut -d '"' -f 4)
+    curl -sSfL "https://github.com/derailed/k9s/releases/download/$${K9S_VERSION}/k9s_Linux_amd64.tar.gz" | tar -xz -C /usr/local/bin k9s
+    chmod +x /usr/local/bin/k9s
+
+  # Install yq (YAML processor)
+  - wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
+  - chmod +x /usr/local/bin/yq
+
+  # Install Cosign (container signing)
+  - curl -sSfL https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64 -o /usr/local/bin/cosign
+  - chmod +x /usr/local/bin/cosign
+
+  # Install crane (container registry tool)
+  - curl -sSfL https://github.com/google/go-containerregistry/releases/latest/download/go-containerregistry_Linux_x86_64.tar.gz | tar -xz -C /usr/local/bin crane
+  - chmod +x /usr/local/bin/crane
+
+  # Install skopeo
+  - apt-get install -y skopeo
+
+  # Install GitHub CLI
+  - curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg 2>/dev/null
+  - chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+  - echo "deb [arch=$$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list
+  - apt-get update
+  - apt-get install -y gh
+
+  # Install Kustomize
+  - curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+  - mv kustomize /usr/local/bin/
+  - chmod +x /usr/local/bin/kustomize
+
+  # User sk setup - clouddrive mount
   - mkdir -p /home/${sk_username}/clouddrive
   - chown ${sk_username}:${sk_username} /home/${sk_username}/clouddrive
-  - echo "//${storage_account_name}.file.core.windows.net/${file_share_name} /home/${sk_username}/clouddrive cifs nofail,credentials=/etc/smbcredentials/${storage_account_name}.cred,dir_mode=0777,file_mode=0777,serverino,nosharesock,actimeo=30,uid=$(id -u ${sk_username}),gid=$(id -g ${sk_username}) 0 0" >> /etc/fstab
+  - |
+    SK_UID=$$(id -u ${sk_username} 2>/dev/null || echo "1001")
+    SK_GID=$$(id -g ${sk_username} 2>/dev/null || echo "1001")
+    echo "//${storage_account_name}.file.core.windows.net/${file_share_name} /home/${sk_username}/clouddrive cifs nofail,credentials=/etc/smbcredentials/${storage_account_name}.cred,dir_mode=0777,file_mode=0777,serverino,nosharesock,actimeo=30,uid=$$SK_UID,gid=$$SK_GID 0 0" >> /etc/fstab
 
-  # User vk setup
-  - usermod -aG docker ${vk_username} || true
+  # User vk setup - clouddrive mount
   - mkdir -p /home/${vk_username}/clouddrive
   - chown ${vk_username}:${vk_username} /home/${vk_username}/clouddrive
-  - echo "//${storage_account_name}.file.core.windows.net/${file_share_name} /home/${vk_username}/clouddrive cifs nofail,credentials=/etc/smbcredentials/${storage_account_name}.cred,dir_mode=0777,file_mode=0777,serverino,nosharesock,actimeo=30,uid=$(id -u ${vk_username}),gid=$(id -g ${vk_username}) 0 0" >> /etc/fstab
+  - |
+    VK_UID=$$(id -u ${vk_username} 2>/dev/null || echo "1002")
+    VK_GID=$$(id -g ${vk_username} 2>/dev/null || echo "1002")
+    echo "//${storage_account_name}.file.core.windows.net/${file_share_name} /home/${vk_username}/clouddrive cifs nofail,credentials=/etc/smbcredentials/${storage_account_name}.cred,dir_mode=0777,file_mode=0777,serverino,nosharesock,actimeo=30,uid=$$VK_UID,gid=$$VK_GID 0 0" >> /etc/fstab
 
-  # Mount all
-  - mount -a
+  # Mount all filesystems
+  - mount -a || true
 
   # Setup Cron Jobs
   # Tag Update (daily at 00:00)
@@ -267,36 +320,13 @@ runcmd:
   - echo "0 */6 * * * root az account get-access-token > /dev/null 2>&1" >> /etc/crontab
 
   # Cloud Drive Mount Check (every 30 minutes)
-  - |
-    cat >> /usr/local/bin/check-clouddrive << 'EOF'
-    #!/bin/bash
-    for USER_HOME in /home/sk /home/vk; do
-      MOUNT_POINT="$USER_HOME/clouddrive"
-      if ! mountpoint -q "$MOUNT_POINT"; then
-        echo "$(date): $MOUNT_POINT is not mounted. Attempting remount..." >> /var/log/clouddrive-check.log
-        mount -a
-      fi
-    done
-    EOF
-    chmod +x /usr/local/bin/check-clouddrive
   - echo "*/30 * * * * root /usr/local/bin/check-clouddrive 2>&1" >> /etc/crontab
 
-  # Disk Usage Alert (daily at 07:00) - Logs warning and broadcasts via wall
-  - |
-    cat >> /usr/local/bin/check-disk-usage << 'EOF'
-    #!/bin/bash
-    THRESHOLD=80
-    USAGE=$(df / | tail -1 | awk '{print $5}' | sed 's/%//')
-    TIMESTAMP=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
-    
-    if [ "$USAGE" -gt "$THRESHOLD" ]; then
-      MSG="[DISK ALERT] $TIMESTAMP: Root disk usage is at ${USAGE}% (threshold: ${THRESHOLD}%)"
-      echo "$MSG" >> /var/log/disk-usage-alert.log
-      # Broadcast to logged-in users
-      wall "$MSG"
-      # Also log to syslog for potential external monitoring
-      logger -p user.warning "$MSG"
-    fi
-    EOF
-    chmod +x /usr/local/bin/check-disk-usage
+  # Disk Usage Alert (daily at 07:00)
   - echo "0 7 * * * root /usr/local/bin/check-disk-usage 2>&1" >> /etc/crontab
+
+  # Reload cron to pick up changes
+  - systemctl restart cron
+
+  # Log completion
+  - echo "Cloud-init completed successfully at $$(date)" >> /var/log/cloud-init-complete.log

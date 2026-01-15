@@ -144,7 +144,12 @@ resource "azurerm_automation_account" "automation" {
   location            = local.rg_location
   resource_group_name = local.rg_name
   sku_name            = "Basic"
-  tags                = var.tags
+
+  identity {
+    type = "SystemAssigned"
+  }
+
+  tags = var.tags
 }
 
 resource "azurerm_automation_runbook" "start_vm" {
@@ -155,11 +160,13 @@ resource "azurerm_automation_runbook" "start_vm" {
   automation_account_name = azurerm_automation_account.automation[0].name
   log_verbose             = false
   log_progress            = false
-  runbook_type            = "PowerShell"
+  runbook_type            = "PowerShell72"
 
   content = <<-EOT
     param (
+      [Parameter(Mandatory=$true)]
       [string]$ResourceGroupName,
+      [Parameter(Mandatory=$true)]
       [string]$VMName
     )
     Connect-AzAccount -Identity
@@ -176,7 +183,7 @@ resource "azurerm_automation_schedule" "weekday_start" {
   automation_account_name = azurerm_automation_account.automation[0].name
   frequency               = "Week"
   interval                = 1
-  timezone                = var.timezone
+  timezone                = var.timezone_iana
   start_time              = timeadd(timestamp(), "24h")
   week_days               = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
 
@@ -203,4 +210,12 @@ resource "azurerm_role_assignment" "vm_contributor" {
   scope                = data.azurerm_resource_group.rg.id
   role_definition_name = "Contributor"
   principal_id         = azurerm_linux_virtual_machine.vm.identity[0].principal_id
+}
+
+# Grant Automation Account permission to start VM
+resource "azurerm_role_assignment" "automation_vm_contributor" {
+  count                = var.enable_auto_start ? 1 : 0
+  scope                = azurerm_linux_virtual_machine.vm.id
+  role_definition_name = "Virtual Machine Contributor"
+  principal_id         = azurerm_automation_account.automation[0].identity[0].principal_id
 }

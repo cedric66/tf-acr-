@@ -1,0 +1,17 @@
+azure-identity>=1.15.0
+azure-mgmt-containerservice>=29.0.0
+azure-mgmt-resource>=23.0.0
+azure-mgmt-containerregistry>=10.0.0
+azure-mgmt-authorization>=4.0.0
+azure-mgmt-monitor>=6.0.0
+azure-mgmt-compute>=30.0.0
+azure-mgmt-network>=25.0.0
+azure-mgmt-policyinsights>=1.1.0
+azure-mgmt-keyvault>=10.0.0
+azure-mgmt-security>=5.0.0
+azure-monitor-query>=1.2.0
+azure-core>=1.29.0
+requests>=2.31.0
+tabulate>=0.9.0
+colorama>=0.4.6
+

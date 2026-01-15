@@ -1,0 +1,5 @@
+subscription_id,resource_group,cluster_name,location,kubernetes_version
+00000000-0000-0000-0000-000000000001,rg-dev-eastus,dev-cluster,eastus,1.28.5
+00000000-0000-0000-0000-000000000001,rg-staging-eastus,staging-cluster,eastus,1.27.9
+00000000-0000-0000-0000-000000000002,rg-prod-westus2,prod-cluster,westus2,1.28.3
+00000000-0000-0000-0000-000000000002,rg-prod-westus2,prod-cluster-dr,eastus,1.28.3

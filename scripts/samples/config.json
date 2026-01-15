@@ -1,0 +1,18 @@
+{
+    "targets": [
+        {
+            "subscription_id": "00000000-0000-0000-0000-000000000001",
+            "resource_groups": [
+                "rg-dev-eastus",
+                "rg-staging-eastus"
+            ],
+            "clusters": [
+                "dev-cluster",
+                "staging-cluster"
+            ]
+        },
+        {
+            "subscription_id": "00000000-0000-0000-0000-000000000002"
+        }
+    ]
+}

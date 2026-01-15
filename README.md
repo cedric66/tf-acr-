@@ -1,34 +1,30 @@
-# Encrypted Repository
+# Encrypted Repository & AKS DevOps Toolkit
 
-This repository contains encrypted content.
+## 🔐 Encrypted Content
+This branch contains encrypted content.
 
-## How to Decrypt
-
-The decryption script is in the `decrypt-tools` branch:
+### How to Decrypt
+The decryption script is included in this branch at `scripts/decrypt-repo.sh`.
 
 ```bash
-# Get the decrypt script
-git checkout decrypt-tools
-cp scripts/decrypt-repo.sh /tmp/
+./scripts/decrypt-repo.sh "jisjfof@894894"
+```
 
-# Return to this branch
-git checkout feature/aca-java-build-17099716206204415901
+## 🛠️ AKS DevOps Toolkit
+This branch also contains the AKS DevOps Toolkit for auditing and managing clusters.
 
-# Decrypt
-/tmp/decrypt-repo.sh <password>
+**Documentation**: [scripts/README.md](scripts/README.md)
+
+**Quick Start**:
+```bash
+cd scripts/
+pip install -r requirements.txt
+python devops_toolkit.py
 ```
 
 ## Encrypted Contents
-
-- `image_evaluation/` - Container image evaluation results
-- `terraform/` - Infrastructure as Code
-- `app/` - Application code
-- `apps/` - Additional applications
+- `image_evaluation/`
+- `terraform/`
+- `app/`
+- `apps/`
 - Documentation files (*.md)
-
-## Contact
-
-For access, contact the repository owner.
-
----
-*Encrypted on: 2026-01-12*

@@ -180,10 +180,50 @@ All scripts include standardized error handling:
 - **Permission Denied (403)**: Missing RBAC role
 - **Unauthorized (401)**: Credentials expired - run `az login`
 - **Not Found (404)**: Resource doesn't exist
-- **Throttled (429)**: Too many requests
+- **Throttled (429)**: Too many requests - **automatic retry with exponential backoff**
+
+---
+
+## 🆕 New Features
+
+### JSON Output for Automation
+
+Most scripts support `--output json` for CI/CD integration:
+
+```bash
+# Pipe to jq for processing
+python aks_fleet_overview.py --output json | jq '.[] | select(.private_cluster == false)'
+
+# Save to file
+python aks_cost_auditor.py --output json > cost_report.json
+
+# Discovery with JSON
+python discover.py --output json > inventory.json
+```
+
+### Automatic Retry on Throttling
+
+All Azure API calls now include automatic retry with exponential backoff when rate-limited (HTTP 429):
+
+- **Max retries**: 3 attempts
+- **Backoff**: 2s → 4s → 8s (with jitter)
+- **Progress**: Shows retry countdown in table mode
+
+### Type Hints
+
+All core utilities now include Python type hints for better IDE support:
+
+```python
+from utils import SubscriptionInfo, retry_on_throttle
+
+@retry_on_throttle(max_retries=3)
+def my_azure_call() -> List[Dict[str, Any]]:
+    ...
+```
 
 ---
 
 ## 🤖 Maintenance
 
 See [AI_MAINTENANCE.md](AI_MAINTENANCE.md) for instructions on adding new scripts.
+

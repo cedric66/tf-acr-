@@ -1,0 +1,2 @@
+subscription_id,resource_group,acr_name,location,sku
+00000000-0000-0000-0000-000000000001,rg-shared,mydevacr,eastus,Standard

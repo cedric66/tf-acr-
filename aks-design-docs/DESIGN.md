@@ -228,28 +228,53 @@ We adopt an automated, channel-based upgrade strategy to minimize toil and ensur
     *   **Strategy:** N-1 version policy.
     *   **Safety:** **Pod Disruption Budgets (PDBs)** must be defined for all tenant workloads to ensure Zero Downtime during rolling upgrades.
 
-### 5.2 Infrastructure as Code & CI/CD
+### 5.2 Infrastructure as Code (IaC)
 
-We adhere to a strict **Infrastructure as Code (IaC)** methodology using Terraform or Bicep.
+We adhere to a strict **Terraform-only** strategy.
 
-*   **Tooling:** Terraform (State in Azure Storage) or Bicep.
-*   **Pipeline:** Azure DevOps or GitHub Actions.
-*   **Workflow:**
-    1.  **Plan:** PR triggers a `terraform plan` to validate changes.
-    2.  **Apply:** Merge to `main` triggers `terraform apply`.
-    3.  **No Manual Changes:** Direct `kubectl` access is restricted; all cluster config changes must go through the pipeline.
+*   **Tooling:** Terraform (OpenTofu compatible).
+*   **State Management:** Azure Storage Account (Encrypted, Versioned, Locked).
+*   **Modules:** Private Terraform Registry or Git-sourced modules (pinned versions).
 
-### 5.3 Advanced Networking
+#### 5.2.1 Automated Testing Strategy (Terratest)
+Infrastructure reliability is validated using **Terratest** (Go library).
+
+*   **Unit Tests:** Validate module outputs and variable validation logic.
+*   **Integration Tests:**
+    1.  CI pipeline spins up an **ephemeral AKS cluster** (or simple resource group).
+    2.  Terratest executes `terraform apply`.
+    3.  Go test functions validate resources (e.g., check `kubectl get nodes` returns Ready state).
+    4.  Terratest executes `terraform destroy`.
+
+### 5.3 CI/CD Architecture (GitHub Actions)
+
+We exclusively use **GitHub Actions** for all orchestration.
+
+#### 5.3.1 Runner Architecture (Private Access)
+Since the AKS API Server is private, standard GitHub-hosted runners cannot reach it.
+
+*   **Solution:** **Actions Runner Controller (ARC)**.
+*   **Deployment:** ARC is deployed in a dedicated "DevOps" subnet within the Hub VNet (or a Management Cluster).
+*   **Flow:**
+    1.  GitHub Action triggers.
+    2.  ARC spins up a **Runner Pod** inside the VNet.
+    3.  Runner Pod executes Terraform/Terratest/Kubectl commands against the private API server.
+
+#### 5.3.2 Pipeline Workflow
+1.  **PR Check:** `terraform fmt`, `tflint`, `terraform plan`, `go test -v (Terratest Unit)`.
+2.  **Merge to Main:** `terraform apply`, `go test -v (Terratest Integration)`.
+
+### 5.4 Advanced Networking
 
 *   **Private Link Service:** Used to expose internal services to other VNets/Consumers without peering.
 *   **NAT Gateway:** Associated with the AKS subnet to ensure a static, deterministic outbound IP for all egress traffic (simplified allowlisting).
 
-### 5.4 Compute Placement
+### 5.5 Compute Placement
 
 *   **Proximity Placement Groups (PPG):** Optional for latency-sensitive workloads to co-locate nodes physically.
 *   **Availability Zones:** Strict distribution across Zones 1, 2, and 3 for both System and User node pools to ensure 99.95% SLA.
 
-### 5.5 Disaster Recovery & Reliability
+### 5.6 Disaster Recovery & Reliability
 
 #### 5.5.1 Backup Strategy
 *   **Tool:** **Azure Backup for AKS**.
@@ -272,13 +297,11 @@ To validate the 99.95% SLA, we integrate **Azure Chaos Studio**.
 4.  **RTO:** Target < 4 hours.
 ---
 
-## 7. Summary of Recommendations
 
-1.  **Network:** Use **Azure CNI Overlay + Cilium** for best performance and security.
-2.  **Ingress:** Migrate to **Application Gateway for Containers (AGC)**.
-3.  **Security:** Enforce **Hard Multi-tenancy** with Namespaces, Network Policies, and Workload Identity.
-4.  **Operations:** Automate upgrades via **Stable** channels and use **IaC/CI/CD** for all changes.
-5.  **Cost:** Implement **OpenCost** for precise showback/chargeback.
+---
+
+
+---
 
 ## 6. Operational Procedures
 
@@ -297,4 +320,69 @@ Since SSH is disabled, debugging follows a strict cloud-native pattern:
     ```
 3.  **Node Debug:** Use `kubectl debug node/aks-node-1` to launch a privileged container on the host.
 
+
+## 7. Advanced Storage Strategy
+
+To support stateful workloads with high performance, we utilize the latest Azure CSI drivers.
+
+### 7.1 Block Storage (Databases)
+*   **Default Class:** `managed-csi-premium` (Premium SSD LRS).
+*   **High Performance:** `managed-csi-premium-v2` (Premium SSD v2).
+    *   **Use Case:** IOPS-intensive databases (Postgres, Cassandra).
+    *   **Benefit:** Decoupled IOPS/Throughput provisioning.
+*   **Data Protection:** **Volume Snapshots** (CSI) are enabled for instant point-in-time recovery.
+
+### 7.2 File Storage (Shared Content)
+*   **Standard:** Azure Files NFS v4.1 (Premium).
+*   **High Performance:** **Azure NetApp Files (ANF)**.
+    *   **Use Case:** Read-heavy shared volumes, legacy CMS, or high-throughput analytics.
+    *   **Configuration:** Deployed in the Spoke VNet using a Delegated Subnet.
+
 ---
+
+## 8. Encryption & Key Management
+
+### 8.1 Control Plane Encryption (KMS)
+We enable **KMS (Key Management Service)** integration for Etcd encryption.
+*   **Mechanism:** The Kubernetes API server uses a Key Encryption Key (KEK) stored in **Azure Key Vault** to encrypt all secrets stored in Etcd.
+*   **Benefit:** Protects against physical media theft or unauthorized snapshot access.
+
+### 8.2 Data Plane Encryption
+*   **OS Disks:** Ephemeral OS disks are encrypted at host (Platform Managed Keys).
+*   **Persistent Volumes:** Encrypted using **Customer Managed Keys (CMK)** via Disk Encryption Sets (DES) if compliance dictates, otherwise Platform Managed Keys (PMK).
+
+---
+
+## 9. Service Mesh Strategy
+
+To minimize resource overhead (sidecars), we adopt **Cilium Service Mesh**.
+
+*   **Architecture:** Sidecar-less (eBPF-based).
+*   **Features:**
+    *   **L7 Traffic Management:** Canary rollouts, retries, circuit breaking.
+    *   **mTLS:** Transparent encryption between services.
+    *   **Observability:** L7 HTTP/gRPC visibility via Hubble.
+*   **Justification:** Significantly lower CPU/Memory footprint compared to Istio.
+
+---
+
+## 10. Governance & Compliance
+
+### 10.1 Security Posture Management
+*   **Tool:** **Microsoft Defender for Containers**.
+*   **Capabilities:**
+    *   **Vulnerability Scanning:** Continuous scanning of running images.
+    *   **Threat Detection:** Anomalous behavior (e.g., crypto mining, reverse shell).
+
+### 10.2 CIS Benchmark
+*   **Validation:** Automated CIS Kubernetes Benchmark assessments via Azure Policy.
+*   **Enforcement:** Policies automatically remediate or deny non-compliant configurations (e.g., ensuring `seccomp` profiles are set).
+
+
+## 11. Summary of Recommendations
+
+1.  **Network:** Use **Azure CNI Overlay + Cilium** for best performance and security.
+2.  **Ingress:** Migrate to **Application Gateway for Containers (AGC)**.
+3.  **Security:** Enforce **Hard Multi-tenancy** with Namespaces, Network Policies, and Workload Identity.
+4.  **Operations:** Automate upgrades via **Stable** channels and use **IaC/CI/CD** for all changes.
+5.  **Cost:** Implement **OpenCost** for precise showback/chargeback.

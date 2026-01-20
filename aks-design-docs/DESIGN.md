@@ -1,434 +1,186 @@
-# Azure Kubernetes Service (AKS) Architecture Design (2026 Ready)
+# Azure Kubernetes Service (AKS) Design Document
 
-## 1. Executive Summary
+## 1. Introduction and Requirements
 
-This design document outlines a comprehensive, future-proof architecture for a general-purpose, enterprise-grade Azure Kubernetes Service (AKS) platform. Designed with a **2026 perspective**, it leverages the latest Azure advancements—including **Cilium-powered networking**, **Application Gateway for Containers (AGC)**, and **Entra Workload ID**—to ensure long-term stability, security, and scalability.
+### 1.1 Business Context
+This architecture is designed for a general-purpose enterprise platform hosting critical microservices. It prioritizes security (Zero Trust), scalability, and operational excellence to support [Business Goal: e.g., Rapid Modernization].
 
-The architecture strictly adheres to the **Azure Well-Architected Framework**, prioritizing Security (Zero Trust), Reliability, and Operational Excellence. It is tailored for **Hard Multi-tenancy**, ensuring strict isolation between diverse workloads sharing the same cluster.
-
-### Key Technology Decisions
-
-| Domain | Technology Selection | Justification (2026 Perspective) |
+### 1.2 Non-Functional Requirements (NFRs)
+| Metric | Target | Description |
 | :--- | :--- | :--- |
-| **Networking** | **Azure CNI Overlay + Cilium** | Replaces legacy Azure CNI. Uses eBPF for high-performance dataplane, advanced security policies, and eliminates IP exhaustion issues. |
-| **Ingress** | **Application Gateway for Containers (AGC)** | The successor to AGIC. Fully supports Kubernetes Gateway API, traffic splitting, and superior performance. |
-| **Identity** | **Entra Workload ID** | Replaces Pod Identity. Standard, secure, federation-based identity management for pods. |
-| **Observability** | **Azure Managed Prometheus & Grafana** | Fully managed, scalable monitoring stack replacing self-hosted solutions. |
-| **Cost** | **OpenCost + Azure Cost Management** | Granular, namespace-level cost attribution for multi-tenant chargeback. |
+| **Availability (SLA)** | 99.95% | Guaranteed via Availability Zones (3) and Uptime SLA. |
+| **RTO** | 4 Hours | Time to restore service in a paired region. |
+| **RPO** | 1 Hour | Max data loss tolerance (Geo-Redundant Backup). |
+| **Scalability** | 1k-10k Pods | Supported via CNI Overlay and Autoscaling. |
+| **Compliance** | PCI-DSS, CIS | Hardened nodes, FIPS compliance (optional), and Audit logging. |
+
+### 1.3 Design Principles
+*   **Infrastructure as Code (IaC):** 100% Terraform/Bicep. No manual changes.
+*   **Immutable Infrastructure:** Nodes are replaced, not patched.
+*   **Zero Trust:** "Never trust, always verify" networking and identity.
 
 ---
 
-## 2. High-Level Architecture
+## 2. Architecture Overview
 
-The solution implements a **Hub-and-Spoke** network topology to centralize shared services (Firewall, DNS, Bastion) while isolating the AKS workload.
-
-### 2.1 Logical Architecture
+The solution follows a **Hub-and-Spoke** topology. The **Hub VNet** contains shared services (Firewall, Bastion), while the **Spoke VNet** hosts the AKS cluster and application resources.
 
 ```mermaid
-graph TD
-    subgraph "Hub VNet"
-        FW[Azure Firewall Premium]
-        Bastion[Azure Bastion]
-        DNS[Private DNS Resolver]
-    end
+architecture-beta
+    group Hub["Hub VNet"]
+        Firewall["Azure Firewall<br/>(Egress)"]
+        Bastion["Azure Bastion"]
 
-    subgraph "Spoke VNet (AKS)"
-        AGC[App Gateway for Containers]
+    group Spoke["Spoke VNet"]
+        AppGW["App Gateway For Containers<br/>(WAF + Ingress)"]
+        AKS["AKS Cluster<br/>(System/User Node Pools)"]
+        ACR["ACR (Private Link)"]
+        KV["Key Vault (CSI/ESO)"]
 
-        subgraph "AKS Cluster (Private)"
-            API[API Server <br/> (Private Endpoint)]
-
-            subgraph "System Node Pool"
-                Cilium[Cilium Agent]
-                CoreDNS
-                Metrics[AMA Metrics]
-            end
-
-            subgraph "User Node Pool (Team A)"
-                AppA[App A Pods]
-            end
-
-            subgraph "User Node Pool (Team B)"
-                AppB[App B Pods]
-            end
-        end
-    end
-
-    Internet --> FW
-    FW --> AGC
-    AGC --> AppA
-    AGC --> AppB
-    Bastion -.-> API
-    API <--> Cilium
+    User --> AppGW
+    AppGW --> AKS
+    AKS --> ACR
+    AKS --> KV
+    AKS -.-> Firewall : Egress UDRs
 ```
-
-### 2.2 Networking Design
-
-We adopt the **Azure CNI Overlay** network plugin powered by **Cilium**.
-
-*   **Overlay Mode:** Pods receive IPs from a private CIDR (e.g., `10.244.0.0/16`) that does not consume VNet IP addresses. The VNet only sees Node IPs. This simplifies IP planning significantly compared to legacy Azure CNI.
-*   **Cilium Dataplane:** Replaces `iptables` with **eBPF**. This provides:
-    *   **Performance:** Near metal network speeds.
-    *   **Security:** Identity-aware network policies (L3/L4/L7).
-    *   **Observability:** Hubble (if enabled) or deep flow logs.
-*   **Egress Traffic:** All egress traffic is routed through **Azure Firewall Premium** in the Hub VNet for FQDN filtering and IDPS.
-
-### 2.3 Compute Design
-
-The cluster is divided into dedicated node pools to separate system concerns from user workloads.
-
-*   **System Node Pool:**
-    *   **Purpose:** Runs critical cluster services (CoreDNS, Cilium, Metrics Agents, Ingress Controllers).
-    *   **Configuration:** `CriticalAddonsOnly=true` taint.
-    *   **VM SKU:** `Standard_D4s_v5` (General Purpose).
-*   **User Node Pools (Spot & On-Demand):**
-    *   **Purpose:** Runs application workloads.
-    *   **Configuration:** Autoscaling enabled (`min: 2`, `max: 20`).
-    *   **VM SKU:** `Standard_E8s_v5` (Memory Optimized) for general enterprise Java/Go apps.
-    *   **Isolation:** Hard separation possible via `nodeSelector` or dedicated pools per tenant if required.
 
 ---
 
-## 3. Identity & Security (Hard Multi-Tenancy)
+## 3. Networking Configuration
 
-To support **Hard Multi-tenancy** (multiple teams sharing the cluster with strict isolation), we implement a "Zero Trust" security model.
+### 3.1 Network Plugin: Azure CNI Overlay
+*   **Rationale:** Eliminates IP exhaustion. Pods get IPs from a private overlay CIDR (e.g., `10.244.0.0/16`) which is NAT"d to the node IP.
+*   **Dataplane:** **Cilium** (eBPF) for high-performance policy enforcement.
 
-### 3.1 Identity Management: Entra Workload ID
-
-We utilize **Microsoft Entra Workload ID** (formerly Azure AD Pod Identity) for all pod authentication.
-
-*   **Mechanism:** Uses Kubernetes Service Account Token Volume Projection and OIDC federation.
-*   **Benefit:** No secrets/passwords stored in the cluster. Pods exchange their K8s Service Account token for an Azure AD Access Token.
-*   **Implementation:**
-    *   Each Tenant/Application gets a dedicated User Managed Identity (UMI).
-    *   Federated credential established between UMI and the K8s Service Account.
-
-### 3.2 Hard Multi-Tenancy Strategy
-
-Isolation is enforced at multiple layers to prevent "noisy neighbor" issues and cross-tenant data access.
-
-| Layer | Control | Implementation Details |
+### 3.2 IP Planning (Subnet Calculator)
+| Subnet | Size | Purpose |
 | :--- | :--- | :--- |
-| **Logical** | **Namespaces** | Each tenant gets a dedicated namespace (e.g., `tenant-a-prod`). |
-| **Network** | **Cilium Network Policies** | **Default Deny** policy applied to all namespaces. Explicit allow rules required for intra-namespace communication. Cross-namespace traffic is blocked by default. |
-| **Compute** | **Resource Quotas** | Strict CPU/Memory Requests & Limits per namespace to prevent resource starvation. |
-| **Storage** | **Storage Classes** | Dynamic provisioning with distinct Storage Accounts per tenant (if strict data isolation is required) or shared storage with strict RBAC. |
-| **Runtime** | **Pod Security Standards** | Enforce **Restricted** profile (no privileged containers, root users, or host path mounts) via Azure Policy (Gatekeeper). |
+| **Hub Gateway** | /26 | VPN/ExpressRoute Gateway. |
+| **Hub Firewall** | /26 | Azure Firewall Premium. |
+| **Hub Bastion** | /26 | Azure Bastion Hosts. |
+| **Spoke Nodes** | /20 | Hosts AKS Nodes (System + User). Supports ~4000 nodes. |
+| **Spoke Ingress** | /24 | Application Gateway for Containers (ALB). |
+| **Spoke PrivLink** | /24 | Private Endpoints (Key Vault, ACR, SQL). |
 
-#### 3.2.1 Sample Cilium Network Policy (Default Deny)
+### 3.3 Egress Control
+*   **User Defined Routes (UDR):** `0.0.0.0/0` next hop routed to Azure Firewall in the Hub.
+*   **HTTP Proxy:** (Optional) For strict environments, inject `HTTP_PROXY` env vars to route non-transparent traffic.
 
-```yaml
-apiVersion: cilium.io/v2
-kind: CiliumNetworkPolicy
-metadata:
-  name: default-deny
-  namespace: tenant-a
-spec:
-  endpointSelector: {}
-  policyEnabled: true
-  ingress:
-    - fromEndpoints:
-        - matchLabels:
-            io.kubernetes.pod.namespace: kube-system
-  egress:
-    - toEndpoints:
-        - matchLabels:
-            io.kubernetes.pod.namespace: kube-system
-            k8s-app: kube-dns
+---
+
+## 4. Cluster Compute and Node Pools
+
+### 4.1 Node Pool Separation
+We separate System and User workloads to prevent noisy neighbors and ensure cluster stability.
+
+| Pool Name | VM SKU | OS | Scaling | Purpose |
+| :--- | :--- | :--- | :--- | :--- |
+| **system** | `Standard_D2s_v5` | Azure Linux (Mariner) | Manual (3) | Critical addons (CoreDNS, Cilium, Metrics). |
+| **user-gen** | `Standard_D4s_v5` | Azure Linux (Mariner) | Auto (2-20) | General purpose workloads. |
+| **user-mem** | `Standard_E4s_v5` | Azure Linux (Mariner) | Auto (0-10) | Memory-intensive apps (Java/Redis). |
+
+### 4.2 OS Configuration
+*   **OS SKU:** **Azure Linux** (optimized for AKS).
+*   **Auto-Upgrade:** `NodeImage` channel (Weekly surge upgrades).
+*   **Hardening:** SSH disabled. Host access via `kubectl debug` only.
+
+---
+
+## 5. Identity and Access Management
+
+### 5.1 Authentication
+*   **Cluster Access:** **Entra ID** integration with Kubernetes RBAC.
+*   **Local Accounts:** **Disabled** (`--disable-local-accounts`) to force Entra ID audit trails.
+
+### 5.2 Managed Identities
+*   **Control Plane:** User Assigned Managed Identity (UAMI) for Control Plane.
+*   **Kubelet:** UAMI for Kubelet (pulling images from ACR).
+*   **Workload Identity:** **Microsoft Entra Workload ID** for pods to access Azure resources (SQL, Key Vault) without secrets.
+
+---
+
+## 6. Security and Network Policies
+
+### 6.1 Network Security
+*   **Network Policies:** **Cilium Network Policies** (Default Deny).
+*   **API Server:** **Private Cluster** (Private Link). Access via Bastion or Runners.
+
+### 6.2 Application Security (WAF)
+*   **WAF:** Application Gateway for Containers (AGC) with WAF policies enabled (OWASP 3.2).
+*   **Scanning:** **Microsoft Defender for Containers** enabled for runtime threat detection.
+
+---
+
+## 7. Ingress/Egress and Secrets
+
+### 7.1 Ingress Flow
+We use **Application Gateway for Containers (AGC)** for 2026-ready ingress.
+
+```flowchart TD
+    User[End Users] -->|HTTPS/TLS| FrontDoor[Azure Front Door]
+    FrontDoor --> WAF[App Gateway for Containers]
+    WAF --> ILB[Internal Load Balancer]
+    ILB --> Ingress[ALB Controller]
+    Ingress --> Pods[Workload Pods]
+    Pods --> DB[(Azure SQL DB)]
+    Pods --> Cache[(Redis Cache)]
+    Monitor[Azure Monitor] -.-> AKS
 ```
 
-
-### 3.4 Advanced Security Controls
-
-#### 3.4.1 Policy Enforcement: Azure Policy (Gatekeeper)
-We enforce organizational standards using **Azure Policy for Kubernetes**, which manages the OPA Gatekeeper admission controller.
-
-*   **Mandatory Policies:**
-    *   **Privileged Containers:** Deny.
-    *   **Root User:** Deny running as root (MustRunAsNonRoot).
-    *   **Allowed Registries:** Only allow images from the private Azure Container Registry (ACR).
-    *   **Internal Load Balancers:** Deny creation of public IPs for Services.
-
-#### 3.4.2 Secret Management
-
-**Zero-Trust Secret Access Flow**
-
-```mermaid
-sequenceDiagram
-    participant Pod as App Pod
-    participant ESO as External Secrets Op
-    participant ID as Entra Workload ID
-    participant KV as Azure Key Vault
-
-    Note over Pod: Pod Starts (No Secrets Mtd)
-    ESO->>ID: Request Token (Federated Cred)
-    ID-->>ESO: Access Token (OIDC)
-    ESO->>KV: Get Secret (using Token)
-    KV-->>ESO: Return Secret Payload
-    ESO->>Pod: Inject as K8s Secret / Volume
-
-    loop Every 1h
-        ESO->>KV: Check for Updates (Rotation)
-    end
+```sequenceDiagram
+    participant Client
+    participant AG as App Gateway (AGC)
+    participant ALB as ALB Controller
+    participant Pod as Workload Pod
+    Client->>AG: HTTPS (TLS1.2+)
+    AG->>ALB: Traffic Split / Header Routing
+    ALB->>Pod: HTTP/gRPC (mTLS optional)
+    Note over Pod: Workload ID Token Injected
 ```
 
-We recommend **External Secrets Operator (ESO)** for high-scale secret management.
+### 7.2 Secret Management Strategy
+We support two patterns based on scale and legacy requirements.
 
-*   **Mechanism:** ESO runs in the cluster and polls **Azure Key Vault**.
-*   **Authentication:** Uses Workload Identity to authenticate to Key Vault (Zero Trust).
-*   **Advantage:** Superior to the CSI Driver for scaling (caching secrets) and supports mirroring secrets to Kubernetes `Secret` objects for native application consumption.
-
-#### 3.4.3 Supply Chain Security
-*   **Image Cleaning:** Enable **Image Cleaner** (Eraser) to automatically remove unused vulnerability-laden images from nodes.
-*   **Signature Verification:** Use **Ratify** + Gatekeeper to verify that only images signed by the CI pipeline (via Notary Project) can be deployed.
-
-#### 3.4.4 Node Hardening
-*   **OS:** **Azure Linux (Mariner)** is the preferred Host OS for 2026 (smaller attack surface than Ubuntu).
-*   **Access:** **SSH Access Disabled** by default. Debugging is performed via `kubectl debug` ephemeral containers only.
-
-### 3.3 Ingress Strategy: Application Gateway for Containers (AGC)
-
-For 2026, we adopt **Application Gateway for Containers (AGC)** over the legacy AGIC.
-
-*   **Architecture:** AGC lives outside the cluster (fully managed PAAS) but integrates directly via the **ALB Controller** running in the System Node Pool.
-*   **API Standard:** We use the **Kubernetes Gateway API** (`gateway.networking.k8s.io`) instead of the legacy Ingress API for richer traffic management.
-*   **Multi-Tenancy:**
-    *   **One AGC per Cluster** (shared infrastructure).
-    *   **Listeners/Routes** separated by hostname (`team-a.corp.com`, `team-b.corp.com`).
-    *   **WAF Policies:** Attached at the listener level to apply specific security rules per tenant.
-
-#### 3.3.1 Best Practices
-*   **End-to-End TLS:** TLS terminated at AGC, then re-encrypted to the Pod (Zero Trust).
-*   **Private Ingress:** AGC is deployed with a Private Frontend IP (internal Load Balancer) to ensure no exposure to the public internet. Access is mediated via the Hub Firewall or VPN.
+*   **Primary (Standard): Azure Key Vault Secret Store CSI Driver.**
+    *   **Pros:** Native Microsoft support, simplest implementation.
+    *   **Cons:** Higher Key Vault API costs at extreme scale.
+*   **High-Scale (Alternative): External Secrets Operator (ESO).**
+    *   **Pros:** Caches secrets, lower API costs, mirrors to K8s Secrets.
+    *   **Cons:** Third-party operator.
 
 ---
 
-## 4. Observability & FinOps
+## 8. Monitoring, Operations, and CI/CD
 
-A 2026-ready architecture moves away from self-hosted monitoring stacks (e.g., in-cluster Prometheus) to fully managed Azure native services to reduce operational overhead.
+### 8.1 Observability
+*   **Metrics:** Azure Managed Prometheus.
+*   **Logs:** Container Insights (Basic Logs).
+*   **Tracing:** Application Insights (OpenTelemetry).
 
-### 4.1 Observability Stack
-
-| Component | Service | Details |
-| :--- | :--- | :--- |
-| **Metrics** | **Azure Monitor Managed Service for Prometheus** | Scrapes metrics from the cluster. Replaces local Prometheus server. |
-| **Visualization** | **Azure Managed Grafana** | Connects to the Managed Prometheus workspace. Provides out-of-the-box dashboards for Cilium, Kubernetes, and Node performance. |
-| **Logs** | **Container Insights (Log Analytics)** | configured with **Basic Logs** plan for high-volume verbose logs (cost optimization) and **Analytics Logs** for critical alerts. |
-
-#### 4.1.1 Cilium Hubble
-*   **Hubble UI:** Enabled via AKS addon for visualizing network flows.
-*   **Flow Logs:** Exported to Azure Monitor for forensic analysis of dropped packets or policy denials.
-
-### 4.2 FinOps Strategy
-
-Multi-tenancy requires strict cost accountability. We implement **OpenCost** integrated with Azure Cost Management.
-
-*   **Tooling:** OpenCost (Standard CNCF project).
-*   **Mechanism:**
-    *   OpenCost queries the Azure Billing API to get real-time spot/on-demand pricing.
-    *   Allocates costs based on `namespace` and `label` breakdown.
-    *   Idle costs are identified and charged back to a "Common Infrastructure" cost center.
-*   **Reporting:**
-    *   Dashboards showing "Cost per Tenant" (Namespace).
-    *   Budgets and Alerts configured in Azure Cost Management to trigger when a Tenant exceeds their monthly forecast.
-
+### 8.2 CI/CD
+*   **Tool:** GitHub Actions with **Actions Runner Controller (ARC)**.
+*   **GitOps:** Infrastructure state in Terraform.
+*   **Policy:** **Azure Policy** (Gatekeeper) enforces constraints (e.g., "No Public IPs").
 
 ---
 
-## 5. Cluster Lifecycle & Operations
+## 9. Reliability and Backup
 
-### 5.1 Upgrade Strategy
+### 9.1 Resilience
+*   **Zones:** All node pools deployed across Availability Zones 1, 2, 3.
+*   **PDBs:** Pod Disruption Budgets mandated for all applications (minAvailable: 1).
 
-We adopt an automated, channel-based upgrade strategy to minimize toil and ensure security compliance.
-
-*   **Node Image Upgrades:**
-    *   **Channel:** `NodeImage` (Automated).
-    *   **Frequency:** Weekly.
-    *   **Mechanism:** Azure automatically reimages nodes with the latest OS patches and container runtime updates. This uses **Surge** upgrades (extra nodes spun up) to prevent capacity loss.
-*   **Kubernetes Version Upgrades:**
-    *   **Channel:** `Stable` (Automated).
-    *   **Strategy:** N-1 version policy.
-    *   **Safety:** **Pod Disruption Budgets (PDBs)** must be defined for all tenant workloads to ensure Zero Downtime during rolling upgrades.
-
-### 5.2 Infrastructure as Code (IaC)
-
-We adhere to a strict **Terraform-only** strategy.
-
-*   **Tooling:** Terraform (OpenTofu compatible).
-*   **State Management:** Azure Storage Account (Encrypted, Versioned, Locked).
-*   **Modules:** Private Terraform Registry or Git-sourced modules (pinned versions).
-
-#### 5.2.1 Automated Testing Strategy (Terratest)
-Infrastructure reliability is validated using **Terratest** (Go library).
-
-*   **Unit Tests:** Validate module outputs and variable validation logic.
-*   **Integration Tests:**
-    1.  CI pipeline spins up an **ephemeral AKS cluster** (or simple resource group).
-    2.  Terratest executes `terraform apply`.
-    3.  Go test functions validate resources (e.g., check `kubectl get nodes` returns Ready state).
-    4.  Terratest executes `terraform destroy`.
-
-### 5.3 CI/CD Architecture (GitHub Actions)
-
-We exclusively use **GitHub Actions** for all orchestration.
-
-#### 5.3.1 Runner Architecture (Private Access)
-Since the AKS API Server is private, standard GitHub-hosted runners cannot reach it.
-
-*   **Solution:** **Actions Runner Controller (ARC)**.
-*   **Deployment:** ARC is deployed in a dedicated "DevOps" subnet within the Hub VNet (or a Management Cluster).
-*   **Flow:**
-    1.  GitHub Action triggers.
-    2.  ARC spins up a **Runner Pod** inside the VNet.
-    3.  Runner Pod executes Terraform/Terratest/Kubectl commands against the private API server.
-
-#### 5.3.2 Pipeline Workflow
-
-**CI/CD Pipeline Sequence**
-
-```mermaid
-sequenceDiagram
-    actor Dev as Developer
-    participant GH as GitHub Actions
-    participant ARC as ARC Runner (VNet)
-    participant TF as Terraform State
-    participant API as AKS API (Private)
-
-    Dev->>GH: Push PR (feature-branch)
-    GH->>ARC: Schedule Job (runs-on: self-hosted)
-    ARC->>TF: terraform plan (Lock State)
-    ARC-->>GH: Report Plan Result
-
-    Dev->>GH: Merge to Main
-    GH->>ARC: Schedule Job
-    ARC->>TF: terraform apply
-    ARC->>API: Configure Cluster (API Calls)
-    ARC->>ARC: Run Terratest (Integration)
-    ARC-->>GH: Deployment Success
-```
-
-1.  **PR Check:** `terraform fmt`, `tflint`, `terraform plan`, `go test -v (Terratest Unit)`.
-2.  **Merge to Main:** `terraform apply`, `go test -v (Terratest Integration)`.
-
-### 5.4 Advanced Networking
-
-*   **Private Link Service:** Used to expose internal services to other VNets/Consumers without peering.
-*   **NAT Gateway:** Associated with the AKS subnet to ensure a static, deterministic outbound IP for all egress traffic (simplified allowlisting).
-
-### 5.5 Compute Placement
-
-*   **Proximity Placement Groups (PPG):** Optional for latency-sensitive workloads to co-locate nodes physically.
-*   **Availability Zones:** Strict distribution across Zones 1, 2, and 3 for both System and User node pools to ensure 99.95% SLA.
-
-### 5.6 Disaster Recovery & Reliability
-
-#### 5.5.1 Backup Strategy
-*   **Tool:** **Azure Backup for AKS**.
-*   **Scope:**
-    *   **Cluster State:** ETCD snapshots (Namespace, Deployment, Service definitions).
-    *   **Persistent Data:** CSI Snapshots of Azure Disks/Files.
-*   **Schedule:** Daily backups with 30-day retention. Cross-region restore enabled.
-
-#### 5.5.2 Chaos Engineering
-To validate the 99.95% SLA, we integrate **Azure Chaos Studio**.
-*   **Experiments:**
-    *   **Pod Chaos:** Randomly kill pods in the System nodepool to verify HA.
-    *   **Network Chaos:** Simulate latency between Spoke and Hub VNet.
-    *   **Node Chaos:** Simulate node eviction (Spot) or failure.
-
-#### 5.5.3 Region Failover Plan
-1.  **Trigger:** Critical Region Outage (Traffic Manager/Front Door detects 5xx).
-2.  **Action:** CI/CD Pipeline deploys Terraform to the Paired Region.
-3.  **Hydration:** Azure Backup restores the latest "Gold" configuration state.
-4.  **RTO:** Target < 4 hours.
----
-
+### 9.2 Backup
+*   **Service:** **Azure Backup for AKS**.
+*   **Schedule:** Daily snapshots (7-day retention), Monthly vault tier (1-year retention).
+*   **Redundancy:** GRS (Geo-Redundant) for cross-region restore.
 
 ---
 
+## 10. Cost Optimization
 
----
-
-## 6. Operational Procedures
-
-### 6.1 Access Control (PIM)
-Direct cluster access is restricted. For emergency "Break-Glass" scenarios:
-*   **Tool:** **Entra Privileged Identity Management (PIM)**.
-*   **Process:** Admins request "Cluster Admin" role activation for a limited duration (e.g., 4 hours).
-*   **Audit:** All actions logged to Azure Monitor Audit Logs.
-
-### 6.2 Troubleshooting Standard Operating Procedure (SOP)
-Since SSH is disabled, debugging follows a strict cloud-native pattern:
-1.  **Log Analysis:** Check Container Insights (Log Analytics) first.
-2.  **Network Debug:** Use `kubectl debug` to attach an ephemeral container (e.g., `netshoot`) to the target pod.
-    ```bash
-    kubectl debug -it pod/target-app --image=nicolaka/netshoot --target=target-app
-    ```
-3.  **Node Debug:** Use `kubectl debug node/aks-node-1` to launch a privileged container on the host.
-
-
-## 7. Advanced Storage Strategy
-
-To support stateful workloads with high performance, we utilize the latest Azure CSI drivers.
-
-### 7.1 Block Storage (Databases)
-*   **Default Class:** `managed-csi-premium` (Premium SSD LRS).
-*   **High Performance:** `managed-csi-premium-v2` (Premium SSD v2).
-    *   **Use Case:** IOPS-intensive databases (Postgres, Cassandra).
-    *   **Benefit:** Decoupled IOPS/Throughput provisioning.
-*   **Data Protection:** **Volume Snapshots** (CSI) are enabled for instant point-in-time recovery.
-
-### 7.2 File Storage (Shared Content)
-*   **Standard:** Azure Files NFS v4.1 (Premium).
-*   **High Performance:** **Azure NetApp Files (ANF)**.
-    *   **Use Case:** Read-heavy shared volumes, legacy CMS, or high-throughput analytics.
-    *   **Configuration:** Deployed in the Spoke VNet using a Delegated Subnet.
-
----
-
-## 8. Encryption & Key Management
-
-### 8.1 Control Plane Encryption (KMS)
-We enable **KMS (Key Management Service)** integration for Etcd encryption.
-*   **Mechanism:** The Kubernetes API server uses a Key Encryption Key (KEK) stored in **Azure Key Vault** to encrypt all secrets stored in Etcd.
-*   **Benefit:** Protects against physical media theft or unauthorized snapshot access.
-
-### 8.2 Data Plane Encryption
-*   **OS Disks:** Ephemeral OS disks are encrypted at host (Platform Managed Keys).
-*   **Persistent Volumes:** Encrypted using **Customer Managed Keys (CMK)** via Disk Encryption Sets (DES) if compliance dictates, otherwise Platform Managed Keys (PMK).
-
----
-
-## 9. Service Mesh Strategy
-
-To minimize resource overhead (sidecars), we adopt **Cilium Service Mesh**.
-
-*   **Architecture:** Sidecar-less (eBPF-based).
-*   **Features:**
-    *   **L7 Traffic Management:** Canary rollouts, retries, circuit breaking.
-    *   **mTLS:** Transparent encryption between services.
-    *   **Observability:** L7 HTTP/gRPC visibility via Hubble.
-*   **Justification:** Significantly lower CPU/Memory footprint compared to Istio.
-
----
-
-## 10. Governance & Compliance
-
-### 10.1 Security Posture Management
-*   **Tool:** **Microsoft Defender for Containers**.
-*   **Capabilities:**
-    *   **Vulnerability Scanning:** Continuous scanning of running images.
-    *   **Threat Detection:** Anomalous behavior (e.g., crypto mining, reverse shell).
-
-### 10.2 CIS Benchmark
-*   **Validation:** Automated CIS Kubernetes Benchmark assessments via Azure Policy.
-*   **Enforcement:** Policies automatically remediate or deny non-compliant configurations (e.g., ensuring `seccomp` profiles are set).
-
-
-## 11. Summary of Recommendations
-
-1.  **Network:** Use **Azure CNI Overlay + Cilium** for best performance and security.
-2.  **Ingress:** Migrate to **Application Gateway for Containers (AGC)**.
-3.  **Security:** Enforce **Hard Multi-tenancy** with Namespaces, Network Policies, and Workload Identity.
-4.  **Operations:** Automate upgrades via **Stable** channels and use **IaC/CI/CD** for all changes.
-5.  **Cost:** Implement **OpenCost** for precise showback/chargeback.
+### 10.1 Strategies
+*   **Spot Instances:** Used for `user-batch` node pools (non-critical jobs).
+*   **Reservations:** 1-year Reserved Instances (RI) for System Node Pool and Baseline User Pool.
+*   **OpenCost:** Deployed for namespace-level cost attribution.
+*   **Rightsizing:** Monthly review of "Wasted CPU/RAM" metrics via Azure Advisor.

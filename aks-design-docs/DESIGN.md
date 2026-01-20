@@ -137,6 +137,33 @@ spec:
             k8s-app: kube-dns
 ```
 
+
+### 3.4 Advanced Security Controls
+
+#### 3.4.1 Policy Enforcement: Azure Policy (Gatekeeper)
+We enforce organizational standards using **Azure Policy for Kubernetes**, which manages the OPA Gatekeeper admission controller.
+
+*   **Mandatory Policies:**
+    *   **Privileged Containers:** Deny.
+    *   **Root User:** Deny running as root (MustRunAsNonRoot).
+    *   **Allowed Registries:** Only allow images from the private Azure Container Registry (ACR).
+    *   **Internal Load Balancers:** Deny creation of public IPs for Services.
+
+#### 3.4.2 Secret Management
+We recommend **External Secrets Operator (ESO)** for high-scale secret management.
+
+*   **Mechanism:** ESO runs in the cluster and polls **Azure Key Vault**.
+*   **Authentication:** Uses Workload Identity to authenticate to Key Vault (Zero Trust).
+*   **Advantage:** Superior to the CSI Driver for scaling (caching secrets) and supports mirroring secrets to Kubernetes `Secret` objects for native application consumption.
+
+#### 3.4.3 Supply Chain Security
+*   **Image Cleaning:** Enable **Image Cleaner** (Eraser) to automatically remove unused vulnerability-laden images from nodes.
+*   **Signature Verification:** Use **Ratify** + Gatekeeper to verify that only images signed by the CI pipeline (via Notary Project) can be deployed.
+
+#### 3.4.4 Node Hardening
+*   **OS:** **Azure Linux (Mariner)** is the preferred Host OS for 2026 (smaller attack surface than Ubuntu).
+*   **Access:** **SSH Access Disabled** by default. Debugging is performed via `kubectl debug` ephemeral containers only.
+
 ### 3.3 Ingress Strategy: Application Gateway for Containers (AGC)
 
 For 2026, we adopt **Application Gateway for Containers (AGC)** over the legacy AGIC.
@@ -201,27 +228,73 @@ We adopt an automated, channel-based upgrade strategy to minimize toil and ensur
     *   **Strategy:** N-1 version policy.
     *   **Safety:** **Pod Disruption Budgets (PDBs)** must be defined for all tenant workloads to ensure Zero Downtime during rolling upgrades.
 
-### 5.2 GitOps & Configuration Management
+### 5.2 Infrastructure as Code & CI/CD
 
-The cluster state is managed entirely via GitOps, prohibiting manual `kubectl apply` operations.
+We adhere to a strict **Infrastructure as Code (IaC)** methodology using Terraform or Bicep.
 
-*   **Tool:** **Flux v2** (AKS Extension) or **ArgoCD**.
-*   **Repository Structure:**
-    *   `infrastructure/`: Helm charts for System Components (Ingress, Cert-Manager, OpenCost).
-    *   `tenants/`: Folder per tenant containing their specific Namespace, Quota, and NetworkPolicy definitions.
-*   **Drift Detection:** Automated reconciliation ensures the cluster matches the Git state within minutes.
+*   **Tooling:** Terraform (State in Azure Storage) or Bicep.
+*   **Pipeline:** Azure DevOps or GitHub Actions.
+*   **Workflow:**
+    1.  **Plan:** PR triggers a `terraform plan` to validate changes.
+    2.  **Apply:** Merge to `main` triggers `terraform apply`.
+    3.  **No Manual Changes:** Direct `kubectl` access is restricted; all cluster config changes must go through the pipeline.
 
-### 5.3 Disaster Recovery
+### 5.3 Advanced Networking
 
-*   **State:** **Azure Backup for AKS** is configured to back up cluster state (ETCD snapshots) and Persistent Volumes to a Recovery Services Vault.
-*   **Region Failover:** In case of a full region outage, a secondary cluster in a paired region (provisioned via Terraform) can be hydrated using the GitOps repository.
+*   **Private Link Service:** Used to expose internal services to other VNets/Consumers without peering.
+*   **NAT Gateway:** Associated with the AKS subnet to ensure a static, deterministic outbound IP for all egress traffic (simplified allowlisting).
 
+### 5.4 Compute Placement
+
+*   **Proximity Placement Groups (PPG):** Optional for latency-sensitive workloads to co-locate nodes physically.
+*   **Availability Zones:** Strict distribution across Zones 1, 2, and 3 for both System and User node pools to ensure 99.95% SLA.
+
+### 5.5 Disaster Recovery & Reliability
+
+#### 5.5.1 Backup Strategy
+*   **Tool:** **Azure Backup for AKS**.
+*   **Scope:**
+    *   **Cluster State:** ETCD snapshots (Namespace, Deployment, Service definitions).
+    *   **Persistent Data:** CSI Snapshots of Azure Disks/Files.
+*   **Schedule:** Daily backups with 30-day retention. Cross-region restore enabled.
+
+#### 5.5.2 Chaos Engineering
+To validate the 99.95% SLA, we integrate **Azure Chaos Studio**.
+*   **Experiments:**
+    *   **Pod Chaos:** Randomly kill pods in the System nodepool to verify HA.
+    *   **Network Chaos:** Simulate latency between Spoke and Hub VNet.
+    *   **Node Chaos:** Simulate node eviction (Spot) or failure.
+
+#### 5.5.3 Region Failover Plan
+1.  **Trigger:** Critical Region Outage (Traffic Manager/Front Door detects 5xx).
+2.  **Action:** CI/CD Pipeline deploys Terraform to the Paired Region.
+3.  **Hydration:** Azure Backup restores the latest "Gold" configuration state.
+4.  **RTO:** Target < 4 hours.
 ---
 
-## 6. Summary of Recommendations
+## 7. Summary of Recommendations
 
 1.  **Network:** Use **Azure CNI Overlay + Cilium** for best performance and security.
 2.  **Ingress:** Migrate to **Application Gateway for Containers (AGC)**.
 3.  **Security:** Enforce **Hard Multi-tenancy** with Namespaces, Network Policies, and Workload Identity.
-4.  **Operations:** Automate upgrades via **Stable** channels and use **GitOps** for all changes.
+4.  **Operations:** Automate upgrades via **Stable** channels and use **IaC/CI/CD** for all changes.
 5.  **Cost:** Implement **OpenCost** for precise showback/chargeback.
+
+## 6. Operational Procedures
+
+### 6.1 Access Control (PIM)
+Direct cluster access is restricted. For emergency "Break-Glass" scenarios:
+*   **Tool:** **Entra Privileged Identity Management (PIM)**.
+*   **Process:** Admins request "Cluster Admin" role activation for a limited duration (e.g., 4 hours).
+*   **Audit:** All actions logged to Azure Monitor Audit Logs.
+
+### 6.2 Troubleshooting Standard Operating Procedure (SOP)
+Since SSH is disabled, debugging follows a strict cloud-native pattern:
+1.  **Log Analysis:** Check Container Insights (Log Analytics) first.
+2.  **Network Debug:** Use `kubectl debug` to attach an ephemeral container (e.g., `netshoot`) to the target pod.
+    ```bash
+    kubectl debug -it pod/target-app --image=nicolaka/netshoot --target=target-app
+    ```
+3.  **Node Debug:** Use `kubectl debug node/aks-node-1` to launch a privileged container on the host.
+
+---

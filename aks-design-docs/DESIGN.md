@@ -8,9 +8,9 @@ This architecture is designed for a general-purpose enterprise platform hosting 
 ### 1.2 Non-Functional Requirements (NFRs)
 | Metric | Target | Description |
 | :--- | :--- | :--- |
-| **Availability (SLA)** | 99.95% | Guaranteed via Availability Zones (3) and Uptime SLA. |
-| **RTO** | <15 Minutes | Time to restore service in a paired region. |
-| **RPO** | 1 Hour | Max data loss tolerance (Geo-Redundant Backup). |
+| **Availability (SLA)** | **99.9% (Composite)** | End-to-end target (AKS 99.95% x AppGW 99.95%). |
+| **RTO** | **<15 Minutes** | Max downtime before service restoration in Paired Region. |
+| **RPO** | **<5 Minutes** | Max data loss (Stateful via Hourly CSI Snapshots). |
 | **Scalability** | 1k-10k Pods | Supported via CNI Overlay and Autoscaling. |
 | **Compliance** | PCI-DSS, CIS | Hardened nodes, FIPS compliance (optional), and Audit logging. |
 
@@ -166,35 +166,40 @@ We support two patterns based on scale and legacy requirements.
 
 ## 9. Reliability and Backup
 
-### 9.1 Availability Zone Strategy (Decision Record)
+### 9.1 SLA & Availability Strategy (Decision Record)
 
-**Decision:** We mandate **Multi-AZ (Zones 1, 2, 3)** for all Production workloads.
+**Decision:** We mandate **Multi-AZ (Zones 1, 2, 3)** with **Uptime SLA Tier** for all Production workloads.
 
 #### 9.1.1 Decision Matrix: Multi-AZ vs Single-Region
 | Factor | Availability Zones (Selected) | Single-Region (Rejected) |
 | :--- | :--- | :--- |
 | **Reliability** | **High**: Survives zone outages; control plane + nodes spread across 3+ AZs. | **Low**: Single fault domain risk; 99.9% SLA max. |
-| **SLA** | **99.95%** (Required for Production). | 99.9% or Free tier. |
+| **SLA** | **99.95%** (Uptime SLA Tier Required). | 99.9% or Free tier. |
 | **Cost** | Medium: 3x minimum nodes required. | Low: Fewer nodes possible. |
 | **Latency** | Acceptable: <2ms inter-zone. | Lowest: All in one DC. |
 | **Use Case** | **Production**, Compliance (RTO < 15m). | Dev/Test, Latency-critical. |
 
-#### 9.1.2 Implementation Guidance
-*   **Configuration:** `--zones 1,2,3` set at creation (Irreversible).
-*   **Scaling:** Enable `--balance-similar-node-groups` in Cluster Autoscaler to ensure even spread across zones during scale-out.
-*   **Performance:** For extreme low-latency needs (e.g., HFT), use **Proximity Placement Groups (PPG)** within a single zone (Exception basis only).
-
+#### 9.1.2 Composite SLA Calculation
+The theoretical availability of the entire system is the product of its critical components:
+*   AKS (Uptime SLA): 99.95%
+*   App Gateway (AGC): 99.95%
+*   Azure SQL (Business Critical): 99.99%
+*   **Total Composite SLA:** `0.9995 * 0.9995 * 0.9999` ≈ **99.89%** (Targeting 99.9%).
 
 ### 9.2 Resilience Configuration
+*   **Implementation:** `az aks update --uptime-sla` enabled.
 *   **Zones:** All node pools deployed across Availability Zones 1, 2, 3.
 *   **PDBs:** Pod Disruption Budgets mandated for all applications (minAvailable: 1).
 
 ### 9.3 Backup Strategy
 *   **Service:** **Azure Backup for AKS**.
-*   **Schedule:** Daily snapshots (7-day retention), Monthly vault tier (1-year retention).
+*   **Schedule:**
+    *   **Hourly:** CSI Snapshots (Retention: 24 Hours) to meet **<5 min RPO**.
+    *   **Daily:** Vault Backup (Retention: 30 Days).
+    *   **Monthly:** Long-term Retention (12 Months).
 *   **Redundancy:** GRS (Geo-Redundant) for cross-region restore.
+*   **Validation:** DR Drills performed **Quarterly** to verify RTO targets.
 
----
 
 ## 10. Cost Optimization
 

@@ -4,10 +4,33 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~> 3.80"
+      version = ">= 4.0"
     }
   }
 }
+
+# =============================================================================
+# AKS Node Auto-Provisioning (NAP) / Karpenter
+# =============================================================================
+# STATUS: ✅ Generally Available (since July 2025)
+#
+# This prototype uses the `node_provisioning_mode` attribute which requires
+# azurerm provider 4.x+ (post-July 2025 releases).
+#
+# If you encounter "unsupported argument" errors, enable NAP via Azure CLI:
+#   az aks update -g <resource-group> -n <cluster-name> --node-provisioning-mode Auto
+#
+# REQUIREMENTS:
+#   - Azure CNI Overlay + Cilium (network_plugin_mode = "overlay", network_dataplane = "cilium")
+#   - System-assigned or User-assigned Managed Identity (no Service Principal)
+#   - Linux nodes only
+#
+# INCOMPATIBLE:
+#   - Kubenet
+#   - Calico
+#   - Windows nodes
+#   - IPv6
+# =============================================================================
 
 provider "azurerm" {
   features {}

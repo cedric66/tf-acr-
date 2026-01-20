@@ -73,7 +73,7 @@ resource "azurerm_kubernetes_cluster" "main" {
     os_disk_size_gb              = var.system_pool_config.os_disk_size_gb
     os_disk_type                 = var.system_pool_config.os_disk_type
     max_pods                     = var.system_pool_config.max_pods
-    enable_auto_scaling          = var.system_pool_config.enable_auto_scaling
+    auto_scaling_enabled         = var.system_pool_config.enable_auto_scaling
     vnet_subnet_id               = var.vnet_subnet_id
     only_critical_addons_enabled = true  # System pool - only kube-system pods
     node_labels                  = local.system_pool_labels
@@ -130,7 +130,6 @@ resource "azurerm_kubernetes_cluster" "main" {
   dynamic "azure_active_directory_role_based_access_control" {
     for_each = var.azure_ad_enabled ? [1] : []
     content {
-      managed                = true
       azure_rbac_enabled     = var.enable_rbac
       admin_group_object_ids = var.admin_group_object_ids
     }

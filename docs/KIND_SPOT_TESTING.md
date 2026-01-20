@@ -203,7 +203,7 @@ Initial distribution: 2 pods on spot-worker2, 3 pods on spot-worker3, 1 pod on o
 |---------|--------|-------------|
 | **Karpenter Auto-Provisioning** | Requires Azure/AWS API | Use real cluster or mock APIs |
 | **Spot Pricing/Max Price** | Azure billing feature | N/A |
-| **Real 2-Minute Warning** | Azure Metadata Service | Use Amazon EC2 Metadata Mock (AEMM) |
+| **Real 2-Minute Warning** | Azure Metadata Service | Use Azure Metadata proxy or generic metadata mock |
 | **Multi-Cluster Contention** | Requires multiple real clusters | Test one cluster, extrapolate |
 | **VMSS Behavior** | Azure infrastructure | Use AKS dev/test environment |
 

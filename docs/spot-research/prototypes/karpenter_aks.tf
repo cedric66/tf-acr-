@@ -65,10 +65,10 @@ spec:
         - key: karpenter.sh/capacity-type
           operator: In
           values: ["spot"]
-        - key: karpenter.k8s.aws/instance-category
+        - key: kubernetes.azure.com/sku-family
           operator: In
           values: ["D", "E"] # Allow flexible SKU families
-        - key: karpenter.k8s.aws/instance-cpu
+        - key: kubernetes.azure.com/sku-cpu
           operator: In
           values: ["2", "4", "8"] # Allow flexible CPU sizes
       nodeClassRef:

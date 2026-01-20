@@ -6,6 +6,23 @@
 
 ---
 
+## Karpenter/NAP Status (as of January 2026)
+
+| Aspect | Status |
+|--------|--------|
+| **Availability** | ✅ **Generally Available** (since July 2025) |
+| **Terraform Support** | azurerm 4.x+ (check your provider version) |
+| **Required Networking** | Azure CNI Overlay + Cilium |
+| **Unsupported** | Kubenet, Calico, Windows nodes, IPv6 |
+
+> [!TIP]
+> NAP is now GA! Enable it directly:
+> ```bash
+> az aks update -g <rg> -n <cluster> --node-provisioning-mode Auto
+> ```
+
+---
+
 ## Executive Summary
 
 This document addresses the challenge of running **10-15 AKS clusters** in a single Azure region while efficiently utilizing **Spot VMs**. At this scale, clusters compete for the same Spot capacity, creating "thundering herd" scenarios during peak demand or regional capacity constraints.

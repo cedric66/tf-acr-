@@ -21,7 +21,7 @@ resource "azurerm_kubernetes_cluster_node_pool" "standard" {
   os_disk_size_gb       = each.value.os_disk_size_gb
   os_disk_type          = each.value.os_disk_type
   max_pods              = each.value.max_pods
-  enable_auto_scaling   = each.value.enable_auto_scaling
+  auto_scaling_enabled  = each.value.enable_auto_scaling
   vnet_subnet_id        = var.vnet_subnet_id
   mode                  = "User"
   
@@ -63,7 +63,7 @@ resource "azurerm_kubernetes_cluster_node_pool" "spot" {
   os_disk_size_gb       = each.value.os_disk_size_gb
   os_disk_type          = each.value.os_disk_type
   max_pods              = each.value.max_pods
-  enable_auto_scaling   = each.value.enable_auto_scaling
+  auto_scaling_enabled  = each.value.enable_auto_scaling
   vnet_subnet_id        = var.vnet_subnet_id
   mode                  = "User"
 

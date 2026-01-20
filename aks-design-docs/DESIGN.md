@@ -150,6 +150,28 @@ We enforce organizational standards using **Azure Policy for Kubernetes**, which
     *   **Internal Load Balancers:** Deny creation of public IPs for Services.
 
 #### 3.4.2 Secret Management
+
+**Zero-Trust Secret Access Flow**
+
+```mermaid
+sequenceDiagram
+    participant Pod as App Pod
+    participant ESO as External Secrets Op
+    participant ID as Entra Workload ID
+    participant KV as Azure Key Vault
+
+    Note over Pod: Pod Starts (No Secrets Mtd)
+    ESO->>ID: Request Token (Federated Cred)
+    ID-->>ESO: Access Token (OIDC)
+    ESO->>KV: Get Secret (using Token)
+    KV-->>ESO: Return Secret Payload
+    ESO->>Pod: Inject as K8s Secret / Volume
+
+    loop Every 1h
+        ESO->>KV: Check for Updates (Rotation)
+    end
+```
+
 We recommend **External Secrets Operator (ESO)** for high-scale secret management.
 
 *   **Mechanism:** ESO runs in the cluster and polls **Azure Key Vault**.
@@ -261,6 +283,30 @@ Since the AKS API Server is private, standard GitHub-hosted runners cannot reach
     3.  Runner Pod executes Terraform/Terratest/Kubectl commands against the private API server.
 
 #### 5.3.2 Pipeline Workflow
+
+**CI/CD Pipeline Sequence**
+
+```mermaid
+sequenceDiagram
+    actor Dev as Developer
+    participant GH as GitHub Actions
+    participant ARC as ARC Runner (VNet)
+    participant TF as Terraform State
+    participant API as AKS API (Private)
+
+    Dev->>GH: Push PR (feature-branch)
+    GH->>ARC: Schedule Job (runs-on: self-hosted)
+    ARC->>TF: terraform plan (Lock State)
+    ARC-->>GH: Report Plan Result
+
+    Dev->>GH: Merge to Main
+    GH->>ARC: Schedule Job
+    ARC->>TF: terraform apply
+    ARC->>API: Configure Cluster (API Calls)
+    ARC->>ARC: Run Terratest (Integration)
+    ARC-->>GH: Deployment Success
+```
+
 1.  **PR Check:** `terraform fmt`, `tflint`, `terraform plan`, `go test -v (Terratest Unit)`.
 2.  **Merge to Main:** `terraform apply`, `go test -v (Terratest Integration)`.
 

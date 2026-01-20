@@ -1,0 +1,155 @@
+# Karpenter NodePool for Spot Instances with Flexible SKU Selection
+#
+# This NodePool allows Karpenter to dynamically select from multiple VM sizes
+# and automatically fall back to on-demand if Spot capacity is unavailable.
+#
+# Apply with: kubectl apply -f karpenter-nodepool.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+
+apiVersion: karpenter.sh/v1beta1
+kind: NodePool
+metadata:
+  name: spot-flexible
+  labels:
+    app.kubernetes.io/managed-by: terraform
+spec:
+  # ─────────────────────────────────────────────────────────────────────────
+  # NODE TEMPLATE
+  # ─────────────────────────────────────────────────────────────────────────
+  template:
+    metadata:
+      labels:
+        node-type: karpenter-managed
+        capacity-type: spot-preferred
+    spec:
+      # REQUIREMENTS: Define acceptable VM configurations
+      requirements:
+        # Capacity Type: Prefer Spot, allow On-Demand fallback
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values:
+            - spot
+            - on-demand
+
+        # VM Family: Allow multiple families for availability
+        - key: kubernetes.azure.com/sku-family
+          operator: In
+          values:
+            - D    # General Purpose (Dv5, Dsv5)
+            - E    # Memory Optimized (Ev5, Esv5)
+            - F    # Compute Optimized (Fsv2)
+
+        # CPU Size: Flexible sizing
+        - key: kubernetes.azure.com/sku-cpu
+          operator: In
+          values:
+            - "2"
+            - "4"
+            - "8"
+            - "16"
+
+        # Availability Zones: Spread across zones
+        - key: topology.kubernetes.io/zone
+          operator: In
+          values:
+            - westeurope-1
+            - westeurope-2
+            - westeurope-3
+
+        # Architecture
+        - key: kubernetes.io/arch
+          operator: In
+          values:
+            - amd64
+
+      # Reference to NodeClass (defines Azure-specific settings)
+      nodeClassRef:
+        name: default
+
+      # Taints to apply to provisioned nodes
+      taints:
+        - key: kubernetes.azure.com/scalesetpriority
+          value: spot
+          effect: NoSchedule
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # RESOURCE LIMITS
+  # ─────────────────────────────────────────────────────────────────────────
+  limits:
+    cpu: 1000         # Max 1000 vCPUs across all nodes
+    memory: 2000Gi    # Max 2000 GiB memory
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # DISRUPTION POLICY
+  # ─────────────────────────────────────────────────────────────────────────
+  disruption:
+    # Consolidation: Move pods to fewer nodes when underutilized
+    consolidationPolicy: WhenUnderutilized
+
+    # Expiration: Replace nodes after 30 days
+    expireAfter: 720h
+
+    # Disruption Budgets: Limit how many nodes can be disrupted at once
+    budgets:
+      - nodes: "10%"        # Max 10% of nodes disrupted simultaneously
+      - nodes: "1"          # At least 1 node can always be disrupted
+        schedule: "0 9 * * 1-5"  # During business hours (Mon-Fri 9am)
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # WEIGHT (for multi-NodePool priority)
+  # ─────────────────────────────────────────────────────────────────────────
+  weight: 100  # Higher weight = preferred for scheduling
+
+---
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FALLBACK: On-Demand NodePool (for critical workloads)
+# ─────────────────────────────────────────────────────────────────────────────
+
+apiVersion: karpenter.sh/v1beta1
+kind: NodePool
+metadata:
+  name: on-demand-fallback
+spec:
+  template:
+    metadata:
+      labels:
+        node-type: karpenter-managed
+        capacity-type: on-demand
+    spec:
+      requirements:
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values:
+            - on-demand
+
+        - key: kubernetes.azure.com/sku-family
+          operator: In
+          values:
+            - D
+            - E
+
+        - key: kubernetes.azure.com/sku-cpu
+          operator: In
+          values:
+            - "4"
+            - "8"
+
+        - key: topology.kubernetes.io/zone
+          operator: In
+          values:
+            - westeurope-1
+            - westeurope-2
+            - westeurope-3
+
+      nodeClassRef:
+        name: default
+
+  limits:
+    cpu: 200  # Limited on-demand capacity
+
+  disruption:
+    consolidationPolicy: WhenEmpty
+    expireAfter: 720h
+
+  weight: 10  # Lower weight = used only when spot unavailable

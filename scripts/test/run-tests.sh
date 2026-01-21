@@ -143,6 +143,30 @@ assert_contains "$OUTPUT" "DRY RUN" "Should be in dry-run mode by default"
 
 echo ""
 
+# ----- Test 6: Export Cluster -----
+echo -e "${YELLOW}Test Set 6: Export Cluster${NC}"
+
+# Test default output (stdout)
+OUTPUT=$("${SCRIPTS_DIR}/export-cluster.sh" --mock "${MOCKS_DIR}/export-aks.json" 2>&1 || true)
+assert_contains "$OUTPUT" "Microsoft.ContainerService/managedClusters" "Should contain AKS resource type"
+assert_contains "$OUTPUT" "test-cluster" "Should contain cluster name"
+
+# Test file output
+TEST_EXPORT_FILE="${MOCKS_DIR}/temp_export.json"
+OUTPUT_FILE_RUN=$("${SCRIPTS_DIR}/export-cluster.sh" --mock "${MOCKS_DIR}/export-aks.json" --output-file "$TEST_EXPORT_FILE" 2>&1 || true)
+
+assert_contains "$OUTPUT_FILE_RUN" "Exported cluster configuration to" "Should confirm file export"
+if [[ -f "$TEST_EXPORT_FILE" ]]; then
+    FILE_CONTENT=$(cat "$TEST_EXPORT_FILE")
+    assert_contains "$FILE_CONTENT" "Microsoft.ContainerService/managedClusters" "File should contain AKS resource type"
+    rm "$TEST_EXPORT_FILE"
+else
+    echo -e "${RED}✗${NC} File export failed - File not found"
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+fi
+
+echo ""
+
 # ==================== Summary ====================
 echo "============================================"
 echo "  Test Summary"

@@ -1,0 +1,5 @@
+{
+  "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/test-rg/providers/Microsoft.ContainerService/managedClusters/test-cluster",
+  "name": "test-cluster",
+  "location": "eastus"
+}

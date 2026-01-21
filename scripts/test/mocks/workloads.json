@@ -1,0 +1,92 @@
+{
+    "items": [
+        {
+            "apiVersion": "apps/v1",
+            "kind": "Deployment",
+            "metadata": {
+                "name": "web-frontend",
+                "namespace": "default"
+            },
+            "spec": {
+                "replicas": 5,
+                "selector": {
+                    "matchLabels": {
+                        "app": "web-frontend"
+                    }
+                },
+                "template": {
+                    "spec": {
+                        "tolerations": [],
+                        "affinity": {}
+                    }
+                }
+            }
+        },
+        {
+            "apiVersion": "apps/v1",
+            "kind": "Deployment",
+            "metadata": {
+                "name": "api-backend",
+                "namespace": "default"
+            },
+            "spec": {
+                "replicas": 3,
+                "selector": {
+                    "matchLabels": {
+                        "app": "api-backend"
+                    }
+                },
+                "template": {
+                    "spec": {
+                        "tolerations": [],
+                        "affinity": {}
+                    }
+                }
+            }
+        },
+        {
+            "apiVersion": "apps/v1",
+            "kind": "StatefulSet",
+            "metadata": {
+                "name": "postgres",
+                "namespace": "database"
+            },
+            "spec": {
+                "replicas": 1,
+                "selector": {
+                    "matchLabels": {
+                        "app": "postgres"
+                    }
+                },
+                "template": {
+                    "spec": {
+                        "tolerations": [],
+                        "affinity": {}
+                    }
+                }
+            }
+        },
+        {
+            "apiVersion": "apps/v1",
+            "kind": "Deployment",
+            "metadata": {
+                "name": "coredns",
+                "namespace": "kube-system"
+            },
+            "spec": {
+                "replicas": 2,
+                "selector": {
+                    "matchLabels": {
+                        "app": "coredns"
+                    }
+                },
+                "template": {
+                    "spec": {
+                        "tolerations": [],
+                        "affinity": {}
+                    }
+                }
+            }
+        }
+    ]
+}

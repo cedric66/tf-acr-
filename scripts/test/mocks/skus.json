@@ -1,0 +1,35 @@
+[
+    {
+        "name": "Standard_D4s_v5",
+        "resourceType": "virtualMachines",
+        "capabilities": [
+            {
+                "name": "LowPriorityCapable",
+                "value": "True"
+            }
+        ],
+        "restrictions": []
+    },
+    {
+        "name": "Standard_D4s_v4",
+        "resourceType": "virtualMachines",
+        "capabilities": [
+            {
+                "name": "LowPriorityCapable",
+                "value": "True"
+            }
+        ],
+        "restrictions": []
+    },
+    {
+        "name": "Standard_D4as_v5",
+        "resourceType": "virtualMachines",
+        "capabilities": [
+            {
+                "name": "LowPriorityCapable",
+                "value": "True"
+            }
+        ],
+        "restrictions": []
+    }
+]

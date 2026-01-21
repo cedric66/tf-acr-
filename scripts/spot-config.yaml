@@ -1,0 +1,28 @@
+# Workload distribution percentages (0-100)
+distribution:
+  stateless_deployments: 80   # % of replicas to migrate to Spot
+  statefulsets: 0              # % to migrate (0 = skip entirely)
+  batch_jobs: 100              # CronJobs/Jobs - ephemeral, ideal for Spot
+
+# Namespaces to exclude from migration (system-critical)
+excluded_namespaces:
+  - kube-system
+  - gatekeeper-system
+  - monitoring
+  - cert-manager
+
+# Preferred VM SKUs for Spot pools (in priority order)
+# Script auto-selects first available in region
+preferred_skus:
+  - Standard_D4s_v5
+  - Standard_D4s_v4
+  - Standard_D4as_v5
+  - Standard_D2s_v5
+
+# Spot pool configuration
+spot_pool:
+  eviction_policy: Delete       # Delete | Deallocate
+  spot_max_price: -1            # -1 = market price (recommended)
+  min_count: 0
+  max_count: 10
+  os_type: Linux

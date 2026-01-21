@@ -1,0 +1,25 @@
+{
+    "name": "test-legacy-cluster",
+    "location": "westus",
+    "sku": {
+        "tier": "Free"
+    },
+    "networkProfile": {
+        "networkPlugin": "kubenet",
+        "networkMode": null,
+        "networkDataplane": null
+    },
+    "agentPoolProfiles": [
+        {
+            "name": "nodepool1",
+            "mode": "System",
+            "scaleSetPriority": "Regular",
+            "count": 2
+        }
+    ],
+    "azureMonitorProfile": {
+        "costAnalysis": {
+            "enabled": false
+        }
+    }
+}

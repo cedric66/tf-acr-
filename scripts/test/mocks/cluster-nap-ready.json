@@ -1,0 +1,25 @@
+{
+  "name": "test-nap-ready-cluster",
+  "location": "eastus",
+  "sku": {
+    "tier": "Standard"
+  },
+  "networkProfile": {
+    "networkPlugin": "azure",
+    "networkMode": "overlay",
+    "networkDataplane": "azure"
+  },
+  "agentPoolProfiles": [
+    {
+      "name": "systempool",
+      "mode": "System",
+      "scaleSetPriority": "Regular",
+      "count": 3
+    }
+  ],
+  "azureMonitorProfile": {
+    "costAnalysis": {
+      "enabled": false
+    }
+  }
+}

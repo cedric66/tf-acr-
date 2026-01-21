@@ -22,17 +22,33 @@ usage() {
 
 while [[ $# -gt 0 ]]; do
     case $1 in
+        --resource-group=*)
+            RESOURCE_GROUP="${1#*=}"
+            shift
+            ;;
         --resource-group|-g)
             RESOURCE_GROUP="$2"
             shift 2
+            ;;
+        --name=*)
+            CLUSTER_NAME="${1#*=}"
+            shift
             ;;
         --name|-n)
             CLUSTER_NAME="$2"
             shift 2
             ;;
+        --output-file=*)
+            OUTPUT_FILE="${1#*=}"
+            shift
+            ;;
         --output-file|-o)
             OUTPUT_FILE="$2"
             shift 2
+            ;;
+        --mock=*)
+            MOCK_FILE="${1#*=}"
+            shift
             ;;
         --mock)
             MOCK_FILE="$2"
@@ -47,7 +63,7 @@ done
 # Validate required args if not mocking
 if [[ -z "$MOCK_FILE" ]]; then
     if [[ -z "$RESOURCE_GROUP" || -z "$CLUSTER_NAME" ]]; then
-        echo "Error: --resource-group and --name are required."
+        echo "Error: --resource-group / -g and --name / -n are required."
         usage
     fi
 fi

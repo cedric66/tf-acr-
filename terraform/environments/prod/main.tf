@@ -178,7 +178,7 @@ module "aks" {
   autoscaler_profile = {
     expander                         = "priority"
     balance_similar_node_groups      = true
-    max_graceful_termination_sec     = 30
+    max_graceful_termination_sec     = 60
     max_node_provisioning_time       = "15m"
     new_pod_scale_up_delay           = "0s"
     scale_down_delay_after_add       = "10m"

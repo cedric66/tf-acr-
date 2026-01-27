@@ -1,5 +1,8 @@
 # Encrypted Repository & AKS DevOps Toolkit
 
+> [!TIP]
+> **New to the project?** Start with the **[Consolidated Project Brief](CONSOLIDATED_PROJECT_BRIEF.md)** for a complete overview.
+
 ## 🔐 Encrypted Content
 This branch contains encrypted content.
 
@@ -58,9 +61,39 @@ module "aks_cluster" {
 }
 ```
 
-Reference the [Project Summary](./docs/PROJECT_SUMMARY.md) for full architectural details.
+Reference the [Consolidated Project Brief](CONSOLIDATED_PROJECT_BRIEF.md) for a high-level summary.
 
-## Encrypted Contents
+## 📚 Documentation Index
+
+### 🎯 Project Guidance
+- [**Consolidated Project Brief**](CONSOLIDATED_PROJECT_BRIEF.md) - Single source of truth
+- [Project Summary](docs/PROJECT_SUMMARY.md) - Detailed deliverables & metrics
+- [Project Gap Analysis](docs/PROJECT_GAP_ANALYSIS.md) - Identified gaps & improvements
+- [300+ Cluster Rollout Strategy](docs/FLEET_ROLLOUT_STRATEGY.md) - Fleet-scale rollout plan
+
+### 🏗️ Technical Architecture
+- [AKS Spot Architecture](docs/AKS_SPOT_NODE_ARCHITECTURE.md) - Core technical design
+- [Scaled Spot Orchestration](docs/SCALED_SPOT_ORCHESTRATION.md) - Scaling & orchestration logic
+- [Networking & Karpenter Guide](docs/AKS_NETWORK_KARPENTER_GUIDE.md) - AKS networking & provisioner setup
+- [Terragrunt Analysis](docs/TERRAGRUNT_ANALYSIS.md) - Infrastructure management patterns
+
+### 🛠️ Operations & SRE
+- [SRE Operational Runbook](docs/SRE_OPERATIONAL_RUNBOOK.md) - Incident response & procedures
+- [DevOps Team Guide](docs/DEVOPS_TEAM_GUIDE.md) - Migration & deployment for app teams
+- [Chaos Engineering Tests](docs/CHAOS_ENGINEERING_TESTS.md) - Resilience validation scenarios
+- [Spot Eviction Scenarios](docs/SPOT_EVICITION_SCENARIOS.md) - Failover, fallback, & recovery (Descheduler)
+- [Robot Shop Spot Testing](docs/ROBOT_SHOP_SPOT_TESTING.md) - End-to-end polyglot microservices test
+- [Manual Eviction Test Manifests](tests/manifests/) - Pre-configured YAMLs for testing
+- [Kind Spot Testing](docs/KIND_SPOT_TESTING.md) - Local spot simulation guide
+
+### ⚖️ Governance & Business
+- [Executive Presentation](docs/EXECUTIVE_PRESENTATION.md) - Business case for leadership
+- [Executive One-Slide Summary](docs/EXECUTIVE_SLIDE.md) - High-level executive brief
+- [FinOps Cost Analysis](docs/FINOPS_COST_ANALYSIS.md) - Detailed financial modeling
+- [Security Assessment](docs/SECURITY_ASSESSMENT.md) - Threat model & compliance
+- [Principal Engineer Audit](docs/PRINCIPAL_ENGINEER_AUDIT.md) - Code review & risk assessment
+
+## 🔐 Encrypted Contents
 - `image_evaluation/`
 - `terraform/`
 - `app/`

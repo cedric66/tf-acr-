@@ -221,3 +221,13 @@ variable "enable_azure_monitor" {
   type        = bool
   default     = true
 }
+
+###############################################################################
+# Priority Expander Deployment
+###############################################################################
+
+variable "deploy_priority_expander" {
+  description = "Automatically deploy the cluster-autoscaler-priority-expander ConfigMap. Requires Kubernetes provider to be configured."
+  type        = bool
+  default     = false
+}

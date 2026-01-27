@@ -1,0 +1,276 @@
+# Robot Shop Helm Values for AKS Spot Node Testing
+# This configuration applies the affinity patterns from our SPOT_EVICITION_SCENARIOS.md
+# to the Instana Robot Shop microservices application.
+#
+# Usage:
+#   helm install robot-shop --repo https://github.com/instana/robot-shop/releases/download/helm-3.10 \
+#     -n robot-shop --create-namespace \
+#     -f tests/robot-shop-spot-config/values.yaml
+#
+# ----------------------------------------------------------------------------------
+# STRATEGY:
+#   - Stateless services (web, cart, catalogue, user, payment, shipping, ratings, dispatch)
+#     -> PREFER Spot nodes (weight: 100) with fallback to Standard nodes.
+#   - Stateful services (mongodb, mysql, redis, rabbitmq)
+#     -> REQUIRE Standard (On-Demand) nodes. NO Spot scheduling allowed.
+# ----------------------------------------------------------------------------------
+
+image:
+  pullPolicy: IfNotPresent
+  repo: robotshop
+  version: latest
+
+nodeport: true # Set to false if using a LoadBalancer
+
+# ----------------------------------------------------------------------------------
+# STATELESS SERVICES: Prefer Spot, Allow Standard Fallback
+# These match the affinity patterns in docs/SPOT_EVICITION_SCENARIOS.md
+# ----------------------------------------------------------------------------------
+
+web:
+  tolerations:
+    - key: kubernetes.azure.com/scalesetpriority
+      operator: Equal
+      value: spot
+      effect: NoSchedule
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          preference:
+            matchExpressions:
+              - key: kubernetes.azure.com/scalesetpriority
+                operator: In
+                values:
+                  - spot
+        - weight: 50
+          preference:
+            matchExpressions:
+              - key: kubernetes.azure.com/scalesetpriority
+                operator: NotIn
+                values:
+                  - spot
+
+cart:
+  tolerations:
+    - key: kubernetes.azure.com/scalesetpriority
+      operator: Equal
+      value: spot
+      effect: NoSchedule
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          preference:
+            matchExpressions:
+              - key: kubernetes.azure.com/scalesetpriority
+                operator: In
+                values:
+                  - spot
+        - weight: 50
+          preference:
+            matchExpressions:
+              - key: kubernetes.azure.com/scalesetpriority
+                operator: NotIn
+                values:
+                  - spot
+
+catalogue:
+  tolerations:
+    - key: kubernetes.azure.com/scalesetpriority
+      operator: Equal
+      value: spot
+      effect: NoSchedule
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          preference:
+            matchExpressions:
+              - key: kubernetes.azure.com/scalesetpriority
+                operator: In
+                values:
+                  - spot
+        - weight: 50
+          preference:
+            matchExpressions:
+              - key: kubernetes.azure.com/scalesetpriority
+                operator: NotIn
+                values:
+                  - spot
+
+user:
+  tolerations:
+    - key: kubernetes.azure.com/scalesetpriority
+      operator: Equal
+      value: spot
+      effect: NoSchedule
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          preference:
+            matchExpressions:
+              - key: kubernetes.azure.com/scalesetpriority
+                operator: In
+                values:
+                  - spot
+        - weight: 50
+          preference:
+            matchExpressions:
+              - key: kubernetes.azure.com/scalesetpriority
+                operator: NotIn
+                values:
+                  - spot
+
+payment:
+  gateway: null
+  tolerations:
+    - key: kubernetes.azure.com/scalesetpriority
+      operator: Equal
+      value: spot
+      effect: NoSchedule
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          preference:
+            matchExpressions:
+              - key: kubernetes.azure.com/scalesetpriority
+                operator: In
+                values:
+                  - spot
+        - weight: 50
+          preference:
+            matchExpressions:
+              - key: kubernetes.azure.com/scalesetpriority
+                operator: NotIn
+                values:
+                  - spot
+
+shipping:
+  gateway: null
+  tolerations:
+    - key: kubernetes.azure.com/scalesetpriority
+      operator: Equal
+      value: spot
+      effect: NoSchedule
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          preference:
+            matchExpressions:
+              - key: kubernetes.azure.com/scalesetpriority
+                operator: In
+                values:
+                  - spot
+        - weight: 50
+          preference:
+            matchExpressions:
+              - key: kubernetes.azure.com/scalesetpriority
+                operator: NotIn
+                values:
+                  - spot
+
+ratings:
+  tolerations:
+    - key: kubernetes.azure.com/scalesetpriority
+      operator: Equal
+      value: spot
+      effect: NoSchedule
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          preference:
+            matchExpressions:
+              - key: kubernetes.azure.com/scalesetpriority
+                operator: In
+                values:
+                  - spot
+        - weight: 50
+          preference:
+            matchExpressions:
+              - key: kubernetes.azure.com/scalesetpriority
+                operator: NotIn
+                values:
+                  - spot
+
+dispatch:
+  tolerations:
+    - key: kubernetes.azure.com/scalesetpriority
+      operator: Equal
+      value: spot
+      effect: NoSchedule
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          preference:
+            matchExpressions:
+              - key: kubernetes.azure.com/scalesetpriority
+                operator: In
+                values:
+                  - spot
+        - weight: 50
+          preference:
+            matchExpressions:
+              - key: kubernetes.azure.com/scalesetpriority
+                operator: NotIn
+                values:
+                  - spot
+
+# ----------------------------------------------------------------------------------
+# STATEFUL SERVICES: Standard Nodes ONLY (No Spot Allowed)
+# These services should NEVER run on Spot nodes due to data integrity concerns.
+# ----------------------------------------------------------------------------------
+
+mongodb:
+  tolerations: []
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: kubernetes.azure.com/scalesetpriority
+                operator: NotIn
+                values:
+                  - spot
+
+mysql:
+  tolerations: []
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: kubernetes.azure.com/scalesetpriority
+                operator: NotIn
+                values:
+                  - spot
+
+redis:
+  storageClassName: managed-premium # Or 'default' / 'gp2' depending on your cluster
+  tolerations: []
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: kubernetes.azure.com/scalesetpriority
+                operator: NotIn
+                values:
+                  - spot
+
+rabbitmq:
+  tolerations: []
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: kubernetes.azure.com/scalesetpriority
+                operator: NotIn
+                values:
+                  - spot

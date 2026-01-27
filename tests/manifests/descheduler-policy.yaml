@@ -1,0 +1,122 @@
+# Kubernetes Descheduler Policy for Spot Node Re-scheduling
+#
+# This policy safely evicts pods from Standard nodes back to Spot nodes
+# when Spot capacity returns. It includes safeguards to prevent infinite
+# eviction loops.
+#
+# IMPORTANT: Requires the Kubernetes Descheduler to be installed:
+#   https://github.com/kubernetes-sigs/descheduler
+#
+# Apply with: kubectl apply -f tests/manifests/descheduler-policy.yaml
+# ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: descheduler-policy
+  namespace: kube-system
+data:
+  policy.yaml: |
+    apiVersion: "descheduler/v1alpha2"
+    kind: "DeschedulerPolicy"
+    profiles:
+      - name: SpotNodeRescheduler
+        pluginConfig:
+          - name: RemovePodsViolatingNodeAffinity
+            args:
+              nodeAffinityType:
+                - "preferredDuringSchedulingIgnoredDuringExecution"
+              # CRITICAL: Only evict if a better node exists
+              # This prevents infinite eviction loops
+              nodeFit: true
+          - name: DefaultEvictor
+            args:
+              # Safety: Only consider pods with this label
+              labelSelector:
+                matchLabels:
+                  cost-optimization: spot-preferred
+              # Safety: Limit eviction rate to prevent cascading failures
+              evictLocalStoragePods: false
+              evictSystemCriticalPods: false
+              # Do not evict more than 10% of pods per run
+              maxNoOfPodsToEvictPerNode: 2
+              maxNoOfPodsToEvictPerNamespace: 5
+        plugins:
+          deschedule:
+            enabled:
+              - RemovePodsViolatingNodeAffinity
+          filter:
+            enabled:
+              - DefaultEvictor
+---
+# Descheduler CronJob to run every 5 minutes
+# Adjust schedule based on your cluster's needs
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: descheduler-spot-rescheduler
+  namespace: kube-system
+spec:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: descheduler-sa
+          restartPolicy: Never
+          containers:
+            - name: descheduler
+              image: registry.k8s.io/descheduler/descheduler:v0.28.1
+              args:
+                - "--policy-config-file=/policy/policy.yaml"
+                - "--v=3"
+              volumeMounts:
+                - name: policy-volume
+                  mountPath: /policy
+          volumes:
+            - name: policy-volume
+              configMap:
+                name: descheduler-policy
+---
+# ServiceAccount for Descheduler
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: descheduler-sa
+  namespace: kube-system
+---
+# ClusterRole for Descheduler
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: descheduler-role
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "watch", "list"]
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "watch", "list"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "watch", "list", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/eviction"]
+    verbs: ["create"]
+  - apiGroups: ["scheduling.k8s.io"]
+    resources: ["priorityclasses"]
+    verbs: ["get", "watch", "list"]
+---
+# ClusterRoleBinding for Descheduler
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: descheduler-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: descheduler-role
+subjects:
+  - kind: ServiceAccount
+    name: descheduler-sa
+    namespace: kube-system

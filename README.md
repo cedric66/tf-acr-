@@ -85,6 +85,10 @@ Reference the [Consolidated Project Brief](CONSOLIDATED_PROJECT_BRIEF.md) for a 
 - [Robot Shop Spot Testing](docs/ROBOT_SHOP_SPOT_TESTING.md) - End-to-end polyglot microservices test
 - [Manual Eviction Test Manifests](tests/manifests/) - Pre-configured YAMLs for testing
 - [Kind Spot Testing](docs/KIND_SPOT_TESTING.md) - Local spot simulation guide
+- [Kubernetes Upgrade Guide](docs/KUBERNETES_UPGRADE_GUIDE.md) - K8s 1.28 → 1.29+ upgrade path
+
+### 📊 Monitoring
+- [Grafana Dashboard Templates](monitoring/dashboards/) - Spot Overview & Autoscaler Status dashboards
 
 ### ⚖️ Governance & Business
 - [Executive Presentation](docs/EXECUTIVE_PRESENTATION.md) - Business case for leadership

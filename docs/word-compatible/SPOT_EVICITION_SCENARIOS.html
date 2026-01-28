@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+body { font-family: "Calibri", "Arial", sans-serif; font-size: 11pt; line-height: 1.5; color: #000; max-width: 800px; margin: 20px auto; }
+h1 { font-size: 24pt; color: #2E74B5; border-bottom: 2px solid #2E74B5; padding-bottom: 10px; margin-top: 24pt; }
+h2 { font-size: 18pt; color: #2E74B5; margin-top: 18pt; }
+h3 { font-size: 14pt; color: #1F4D78; margin-top: 14pt; }
+h4 { font-size: 12pt; font-weight: bold; margin-top: 12pt; }
+p { margin-bottom: 10pt; }
+ul, ol { margin-bottom: 10pt; }
+li { margin-bottom: 4pt; }
+pre { font-family: "Consolas", "Courier New", monospace; font-size: 10pt; background-color: #f5f5f5; padding: 10px; border: 1px solid #ddd; white-space: pre-wrap; word-wrap: break-word; }
+code { font-family: "Consolas", "Courier New", monospace; color: #c7254e; background-color: #f9f2f4; padding: 2px 4px; border-radius: 4px; }
+pre code { background-color: transparent; color: inherit; padding: 0; }
+.mermaid { border: 1px solid #007acc; background-color: #e6f7ff; padding: 15px; border-radius: 5px; margin: 10px 0; }
+.mermaid-title { color: #007acc; font-weight: bold; font-family: sans-serif; margin-bottom: 5px; }
+table { border-collapse: collapse; width: 100%; margin-bottom: 15px; }
+th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+th { background-color: #f2f2f2; color: #333; }
+blockquote { border-left: 4px solid #ddd; padding-left: 15px; color: #666; font-style: italic; }
+</style>
+</head><body>
+<h1>🧪 AKS Spot Eviction Scenarios & Re-scheduling</h1>
+<p>This document details the observed behavior of workloads during Spot VM evictions and provides a solution for the "Sticky Fallback" problem where pods stay on Standard nodes even after Spot capacity returns.</p>
+<h2>📋 Observed Scenarios</h2>
+<table>
+<tr><td>Scenario</td><td>Event</td><td>Observed Behavior</td><td>Status</td></tr>
+<tr><td>:---</td><td>:---</td><td>:---</td><td>:---</td></tr>
+<tr><td><b>1. Failover</b></td><td>Spot Pool 1 evicted</td><td>Pods automatically reschedule to Spot Pool 2.</td><td>✅ Correct</td></tr>
+<tr><td><b>2. Fallback</b></td><td>All Spot Pools evicted</td><td>Pods automatically reschedule to the Standard (On-Demand) pool.</td><td>✅ Correct</td></tr>
+<tr><td><b>3. Recovery</b></td><td>Spot capacity returns</td><td><b>Pods stay on the Standard pool</b> despite Spot availability.</td><td>⚠️ Sub-optimal</td></tr>
+</table>
+<p>---</p>
+<h2>⚡ The "Sticky Fallback" Problem</h2>
+<p>By default, the Kubernetes Scheduler is a "one-shot" operation. Once a pod is successfully scheduled on a node (the Standard node in Scenario 2), it will stay there until it is deleted, the node is drained, or the pod restarts. It <b>will not</b> automatically relocate just because a "better" (cheaper) node becomes available.</p>
+<h3>Why this happens:</h3>
+<ol>
+<li><b>No Preemption</b>: Standard nodes have equal or higher priority than Spot nodes in the eyes of the scheduler once running.</li>
+<li><b>Cost-Unawareness</b>: The default scheduler doesn't continuously evaluate "cost-efficiency" for already running pods.</li>
+<li><b>Cluster Autoscaler Limitation</b>: The Autoscaler only scales <i>down</i> Standard nodes if they are underutilized, but it won't move pods to Spot nodes to <i>create</i> that underutilization.</li>
+</ol>
+<p>---</p>
+<h2>🛠️ Solution: Kubernetes Descheduler</h2>
+<p>To solve this, we implement the <b>Kubernetes Descheduler</b> with the <code>RemovePodsViolatingNodeAffinity</code> strategy.</p>
+<h3>1. Configuration Principle</h3>
+<p>We configure our pods to <b>prefer</b> Spot nodes using <code>preferredDuringSchedulingIgnoredDuringExecution</code>.</p>
+<pre class="yaml"><code>
+affinity:
+
+  nodeAffinity:
+
+    preferredDuringSchedulingIgnoredDuringExecution:
+
+    - weight: 100
+
+      preference:
+
+        matchExpressions:
+
+        - key: kubernetes.azure.com/scalesetpriority
+
+          operator: In
+
+          values:
+
+          - spot
+
+</code></pre>
+<h3>2. Descheduler Strategy</h3>
+<p>The Descheduler runs as a CronJob or Deployment and looks for pods that are on nodes that no longer match their "preferred" affinity (i.e., they are on Standard nodes while Spot nodes have room).</p>
+<p><b>Descheduler Policy Example:</b></p>
+<pre class="yaml"><code>
+apiVersion: descheduler/v1alpha1
+
+kind: DeschedulerPolicy
+
+strategies:
+
+  &quot;RemovePodsViolatingNodeAffinity&quot;:
+
+    enabled: true
+
+    params:
+
+      nodeAffinityType:
+
+        - &quot;preferredDuringSchedulingIgnoredDuringExecution&quot;
+
+</code></pre>
+<h3>3. How it Works during Recovery (Scenario 4)</h3>
+<ol>
+<li><b>Spot Pool Returns</b>: Cluster Autoscaler or Karpenter sees Spot nodes are available.</li>
+<li><b>Descheduler Runs</b>: It identifies pods on <code>Standard</code> nodes that have a <code>preferred</code> affinity for <code>Spot</code> nodes.</li>
+<li><b>Eviction</b>: Descheduler evicts those pods from the Standard nodes.</li>
+<li><b>Rescheduling</b>: The Scheduler picks up the evicted pods and, seeing available Spot nodes, places them back on the cheaper capacity.</li>
+</ol>
+<p>---</p>
+<h2>🚀 Recommended Implementation</h2>
+<p>For production clusters, we recommend:</p>
+<ol>
+<li><b>Low Frequency</b>: Run the Descheduler every 5-10 minutes to avoid constant pod churn.</li>
+<li><b>Pod Disruption Budgets (PDBs)</b>: Always ensure PDBs are in place so the Descheduler doesn't evict too many replicas at once.</li>
+<li><b>Exclusion Labels</b>: Use labels to prevent the Descheduler from touching critical or sensitive pods that shouldn't be moved.</li>
+</ol>
+<p>---</p>
+<h2>🧪 How to Test These Scenarios</h2>
+<p>We have provided dedicated test manifests in the <code>tests/manifests/</code> directory to help you validate these behaviors:</p>
+<h3>1. Deploy the Test Workload</h3>
+<p>Deploy a 6-replica application that prefers Spot nodes:</p>
+<pre class="bash"><code>
+kubectl apply -f tests/manifests/eviction-test-workload.yaml
+
+</code></pre>
+<h3>2. Simulate Eviction</h3>
+<p>Trigger an eviction or scale down the Spot pools. Observe the pods moving to Standard nodes (Scenario 2).</p>
+<h3>3. Recover Spot Capacity</h3>
+<p>Scale the Spot pools back up. Observe that the pods <b>do not</b> automatically move back (Scenario 3 - Sticky Fallback).</p>
+<h3>4. Apply the Descheduler</h3>
+<p>Apply the Descheduler policy to force the pods back to the preferred Spot nodes:</p>
+<pre class="bash"><code>
+kubectl apply -f tests/manifests/descheduler-policy.yaml
+
+</code></pre>
+<p><i>Note: This requires the Kubernetes Descheduler to be installed in your cluster.</i></p>
+<p>---</p>
+<p><b>Last Updated</b>: 2026-01-27  </p>
+<p><b>Status</b>: ✅ Documentation & Test Manifests Ready</p>
+</body></html>

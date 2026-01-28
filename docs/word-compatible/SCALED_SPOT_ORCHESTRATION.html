@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+body { font-family: "Calibri", "Arial", sans-serif; font-size: 11pt; line-height: 1.5; color: #000; max-width: 800px; margin: 20px auto; }
+h1 { font-size: 24pt; color: #2E74B5; border-bottom: 2px solid #2E74B5; padding-bottom: 10px; margin-top: 24pt; }
+h2 { font-size: 18pt; color: #2E74B5; margin-top: 18pt; }
+h3 { font-size: 14pt; color: #1F4D78; margin-top: 14pt; }
+h4 { font-size: 12pt; font-weight: bold; margin-top: 12pt; }
+p { margin-bottom: 10pt; }
+ul, ol { margin-bottom: 10pt; }
+li { margin-bottom: 4pt; }
+pre { font-family: "Consolas", "Courier New", monospace; font-size: 10pt; background-color: #f5f5f5; padding: 10px; border: 1px solid #ddd; white-space: pre-wrap; word-wrap: break-word; }
+code { font-family: "Consolas", "Courier New", monospace; color: #c7254e; background-color: #f9f2f4; padding: 2px 4px; border-radius: 4px; }
+pre code { background-color: transparent; color: inherit; padding: 0; }
+.mermaid { border: 1px solid #007acc; background-color: #e6f7ff; padding: 15px; border-radius: 5px; margin: 10px 0; }
+.mermaid-title { color: #007acc; font-weight: bold; font-family: sans-serif; margin-bottom: 5px; }
+table { border-collapse: collapse; width: 100%; margin-bottom: 15px; }
+th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+th { background-color: #f2f2f2; color: #333; }
+blockquote { border-left: 4px solid #ddd; padding-left: 15px; color: #666; font-style: italic; }
+</style>
+</head><body>
+<h1>Scaled Spot Orchestration Guide</h1>
+<blockquote><b>Version:</b> 1.0</blockquote>
+<blockquote><b>Created:</b> 2026-01-20</blockquote>
+<blockquote><b>Scope:</b> Managing 10-15 AKS Clusters with Spot Instances at Scale</blockquote>
+<p>---</p>
+<h2>Karpenter/NAP Status (as of January 2026)</h2>
+<table>
+<tr><td>Aspect</td><td>Status</td></tr>
+<tr><td><b>Availability</b></td><td>✅ <b>Generally Available</b> (since July 2025)</td></tr>
+<tr><td><b>Terraform Support</b></td><td>azurerm 4.x+ (check your provider version)</td></tr>
+<tr><td><b>Required Networking</b></td><td>Azure CNI Overlay + Cilium</td></tr>
+<tr><td><b>Unsupported</b></td><td>Kubenet, Calico, Windows nodes, IPv6</td></tr>
+<blockquote>[!TIP]</blockquote>
+<blockquote>NAP is now GA! Enable it directly:</blockquote>
+<blockquote><code></code>`bash</blockquote>
+<blockquote>az aks update -g <rg> -n <cluster> --node-provisioning-mode Auto</blockquote>
+<blockquote><code></code>`</blockquote>
+<p>---</p>
+<h2>Executive Summary</h2>
+<p>This document addresses the challenge of running <b>10-15 AKS clusters</b> in a single Azure region while efficiently utilizing <b>Spot VMs</b>. At this scale, clusters compete for the same Spot capacity, creating "thundering herd" scenarios during peak demand or regional capacity constraints.</p>
+<p>The solution combines:</p>
+<ol>
+<li><b>Instance Diversity</b> - Spread workloads across multiple VM SKUs</li>
+<li><b>Regional Distribution</b> - Utilize multiple Availability Zones and regions</li>
+<li><b>Karpenter (NAP)</b> - Dynamic provisioning for automatic fallback</li>
+<li><b>Coordinated Scaling</b> - Staggered scaling to avoid capacity spikes</li>
+</ol>
+<p>---</p>
+<h2>Table of Contents</h2>
+<ol>
+<li><a href="#the-contention-problem">The Contention Problem</a></li>
+<li><a href="#scenario-analysis">Scenario Analysis</a></li>
+<li><a href="#solution-architecture">Solution Architecture</a></li>
+<li><a href="#karpenter-implementation">Karpenter Implementation</a></li>
+<li><a href="#fleet-management-strategies">Fleet Management Strategies</a></li>
+<li><a href="#testing--simulation">Testing & Simulation</a></li>
+</ol>
+<p>---</p>
+<h2>The Contention Problem</h2>
+<h3>Why 10-15 Clusters Creates Unique Challenges</h3>
+<pre class=""><code>
+┌─────────────────────────────────────────────────────────────────────────────┐
+
+│                        Azure Region: West Europe                             │
+
+│                                                                              │
+
+│   ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐              │
+
+│   │Cluster 1│ │Cluster 2│ │Cluster 3│ │Cluster 4│ │Cluster 5│  ...x15      │
+
+│   └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘              │
+
+│        │          │          │          │          │                       │
+
+│        └──────────┴──────────┴──────────┴──────────┘                       │
+
+│                              │                                              │
+
+│                              ▼                                              │
+
+│                    ┌─────────────────┐                                      │
+
+│                    │  Azure Spot     │                                      │
+
+│                    │  Capacity Pool  │ ◄── LIMITED CAPACITY                 │
+
+│                    │  (D4s_v5)       │                                      │
+
+│                    └─────────────────┘                                      │
+
+└─────────────────────────────────────────────────────────────────────────────┘
+
+</code></pre>
+<p><b>Key Issues:</b></p>
+<table>
+<tr><td>Issue</td><td>Description</td><td>Impact</td></tr>
+<tr><td><b>Thundering Herd</b></td><td>All clusters scale up simultaneously (e.g., 9am workday start)</td><td>90% of requests fail due to capacity exhaustion</td></tr>
+<tr><td><b>SKU Stockout</b></td><td>Single popular SKU (e.g., D4s_v5) exhausted</td><td>All clusters stuck in Pending state</td></tr>
+<tr><td><b>Eviction Cascade</b></td><td>Azure reclaims capacity, evicting pods across all clusters</td><td>Mass service disruption</td></tr>
+<tr><td><b>Quota Contention</b></td><td>Subscription-level vCPU quotas shared across clusters</td><td>Quota exhaustion blocks scaling</td></tr>
+<h3>Statistical Analysis: Failure Probability</h3>
+<table>
+<tr><td>Clusters</td><td>Same SKU Probability</td><td>Simultaneous Scale Request</td><td>Capacity Failure Rate</td></tr>
+<tr><td>1</td><td>-</td><td>-</td><td>~5%</td></tr>
+<tr><td>5</td><td>80%</td><td>~3 clusters</td><td>~25%</td></tr>
+<tr><td>10</td><td>90%</td><td>~6 clusters</td><td>~50%</td></tr>
+<tr><td>15</td><td>95%</td><td>~9 clusters</td><td>~70%</td></tr>
+</table>
+<p>---</p>
+<h2>Scenario Analysis</h2>
+<h3>Scenario 1: Morning Burst (Common)</h3>
+<p><b>Event:</b> All clusters scale up at 9:00 AM as developers start work.</p>
+<p><b>Without Mitigation:</b></p>
+<ul>
+<li>15 clusters request 10 nodes each = 150 node requests</li>
+<li>All request <code>Standard_D4s_v5</code> in Zone 1</li>
+<li>Azure capacity: ~50 nodes available</li>
+<li>Result: 100 nodes stuck in Pending</li>
+</ul>
+<p><b>With Karpenter + Diversity:</b></p>
+<ul>
+<li>Karpenter selects from: <code>D4s_v5</code>, <code>D8s_v5</code>, <code>E4s_v5</code>, <code>E8s_v5</code></li>
+<li>Requests spread across Zones 1, 2, 3</li>
+<li>Result: 95%+ success rate</li>
+</ul>
+<h3>Scenario 2: Regional Eviction Event (Rare but Critical)</h3>
+<p><b>Event:</b> Azure needs capacity for priority workloads, evicts Spot VMs region-wide.</p>
+<p><b>Without Mitigation:</b></p>
+<ul>
+<li>All 15 clusters lose Spot nodes simultaneously</li>
+<li>Standard pools overwhelmed</li>
+<li>30-minute recovery time</li>
+</ul>
+<p><b>With Mitigation:</b></p>
+<ul>
+<li>Pod Disruption Budgets limit eviction rate</li>
+<li>Standard pools pre-scaled with buffer capacity</li>
+<li>Karpenter immediately provisions alternative SKUs</li>
+<li>Recovery time: 2-5 minutes</li>
+</ul>
+<h3>Scenario 3: Quota Exhaustion</h3>
+<p><b>Event:</b> Subscription vCPU quota reached.</p>
+<p><b>Symptoms:</b></p>
+<ul>
+<li>Cluster Autoscaler/Karpenter log: <code>QuotaExceeded</code></li>
+<li>All clusters blocked from scaling</li>
+</ul>
+<p><b>Mitigation:</b></p>
+<ul>
+<li>Distribute clusters across multiple subscriptions</li>
+<li>Request quota increases proactively</li>
+<li>Implement quota-aware scheduling</li>
+</ul>
+<p>---</p>
+<h2>Solution Architecture</h2>
+<h3>Multi-Layer Defense</h3>
+<pre class=""><code>
+┌────────────────────────────────────────────────────────────────────┐
+
+│                     LAYER 1: INSTANCE DIVERSITY                     │
+
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐          │
+
+│  │ D4s_v5   │  │ D8s_v5   │  │ E4s_v5   │  │ F8s_v2   │          │
+
+│  │ (25%)    │  │ (25%)    │  │ (25%)    │  │ (25%)    │          │
+
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘          │
+
+├────────────────────────────────────────────────────────────────────┤
+
+│                     LAYER 2: ZONE DISTRIBUTION                      │
+
+│      Zone 1 (33%)      Zone 2 (33%)      Zone 3 (34%)            │
+
+├────────────────────────────────────────────────────────────────────┤
+
+│                     LAYER 3: KARPENTER (NAP)                        │
+
+│  • Dynamic SKU selection based on availability                      │
+
+│  • Automatic Spot → On-Demand fallback                             │
+
+│  • Consolidation for cost optimization                              │
+
+├────────────────────────────────────────────────────────────────────┤
+
+│                     LAYER 4: FLEET COORDINATION                     │
+
+│  • Staggered scaling windows per cluster                            │
+
+│  • Quota distribution across subscriptions                          │
+
+│  • Cross-cluster health observability                               │
+
+└────────────────────────────────────────────────────────────────────┘
+
+</code></pre>
+<p>---</p>
+<h2>Karpenter Implementation</h2>
+<h3>Why Karpenter (AKS Node Autoprovisioning)?</h3>
+<table>
+<tr><td>Feature</td><td>Native Autoscaler</td><td>Karpenter (NAP)</td></tr>
+<tr><td>SKU Selection</td><td>Fixed per pool</td><td>Dynamic from list</td></tr>
+<tr><td>Spot Fallback</td><td>Manual pool switching</td><td>Automatic</td></tr>
+<tr><td>Provisioning Speed</td><td>~2-3 minutes</td><td>~1-2 minutes</td></tr>
+<tr><td>Bin Packing</td><td>Basic</td><td>Optimized</td></tr>
+<tr><td>Consolidation</td><td>Manual</td><td>Automatic</td></tr>
+<h3>Terraform Deployment</h3>
+<p>See <a href="../terraform/prototypes/aks-nap/main.tf">terraform/prototypes/aks-nap/main.tf</a> for complete code.</p>
+<pre class="hcl"><code>
+resource &quot;azurerm_kubernetes_cluster&quot; &quot;nap_enabled&quot; {
+
+  # ...
+
+  node_provisioning_mode = &quot;Auto&quot;  # Enables Karpenter
+
+
+
+  network_profile {
+
+    network_plugin      = &quot;azure&quot;
+
+    network_plugin_mode = &quot;overlay&quot;
+
+    network_policy      = &quot;cilium&quot;
+
+    network_data_plane  = &quot;cilium&quot;
+
+  }
+
+}
+
+</code></pre>
+<h3>Karpenter NodePool Configuration</h3>
+<pre class="yaml"><code>
+apiVersion: karpenter.sh/v1beta1
+
+kind: NodePool
+
+metadata:
+
+  name: spot-flexible
+
+spec:
+
+  template:
+
+    spec:
+
+      requirements:
+
+        - key: karpenter.sh/capacity-type
+
+          operator: In
+
+          values: [&quot;spot&quot;, &quot;on-demand&quot;]  # Fallback enabled
+
+        - key: kubernetes.azure.com/sku-family
+
+          operator: In
+
+          values: [&quot;D&quot;, &quot;E&quot;, &quot;F&quot;]  # Multiple families
+
+        - key: kubernetes.azure.com/sku-cpu
+
+          operator: In
+
+          values: [&quot;2&quot;, &quot;4&quot;, &quot;8&quot;, &quot;16&quot;]
+
+      nodeClassRef:
+
+        name: default
+
+  limits:
+
+    cpu: 1000
+
+  disruption:
+
+    consolidationPolicy: WhenUnderutilized
+
+    budgets:
+
+      - nodes: &quot;10%&quot;  # Max 10% nodes disrupted at once
+
+</code></pre>
+<p>---</p>
+<h2>Fleet Management Strategies</h2>
+<h3>Strategy 1: Staggered Scaling Windows</h3>
+<p>Prevent thundering herd by offsetting cluster scaling:</p>
+<pre class="yaml"><code>
+# Cluster 1-5: Business hours scaling starts at 8:55 AM
+
+# Cluster 6-10: Business hours scaling starts at 9:00 AM
+
+# Cluster 11-15: Business hours scaling starts at 9:05 AM
+
+</code></pre>
+<h3>Strategy 2: Subscription Distribution</h3>
+<table>
+<tr><td>Subscription</td><td>Clusters</td><td>vCPU Quota</td><td>Region</td></tr>
+<tr><td>Sub-Prod-A</td><td>1-5</td><td>500 vCPU</td><td>West Europe</td></tr>
+<tr><td>Sub-Prod-B</td><td>6-10</td><td>500 vCPU</td><td>West Europe</td></tr>
+<tr><td>Sub-Prod-C</td><td>11-15</td><td>500 vCPU</td><td>North Europe</td></tr>
+<h3>Strategy 3: SKU Affinity per Cluster Group</h3>
+<p>To avoid all clusters competing for the same SKU:</p>
+<table>
+<tr><td>Cluster Group</td><td>Primary SKU</td><td>Secondary SKU</td></tr>
+<tr><td>1-5</td><td>D4s_v5</td><td>E4s_v5</td></tr>
+<tr><td>6-10</td><td>D8s_v5</td><td>E8s_v5</td></tr>
+<tr><td>11-15</td><td>E4s_v5</td><td>D4s_v5</td></tr>
+</table>
+<p>---</p>
+<h2>Testing & Simulation</h2>
+<h3>Local Simulation with Kind</h3>
+<p>Since Karpenter requires Azure APIs, we simulate the <b>behavior</b> locally:</p>
+<ol>
+<li><b>Stockout Simulation</b>: Taint nodes as "unavailable" to force fallback</li>
+<li><b>Eviction Simulation</b>: Drain nodes to test pod rescheduling</li>
+<li><b>Capacity Recovery</b>: Uncordon nodes to simulate new capacity</li>
+</ol>
+<p>See <a href="../scripts/simulate_spot_contention.sh">scripts/simulate_spot_contention.sh</a> for the full script.</p>
+<h3>Chaos Engineering Recommendations</h3>
+<ol>
+<li><b>FIS (Fault Injection Simulator)</b>: Use Azure FIS to simulate Spot evictions</li>
+<li><b>Scheduled Drains</b>: Regularly drain Spot nodes in non-prod to test resilience</li>
+<li><b>Quota Throttling</b>: Temporarily reduce quota to test capacity-constrained behavior</li>
+</ol>
+<p>---</p>
+<h2>Decision Matrix</h2>
+<table>
+<tr><td>Criteria</td><td>Recommendation</td></tr>
+<tr><td>< 5 clusters</td><td>Native Autoscaler is sufficient</td></tr>
+<tr><td>5-10 clusters</td><td>Consider Karpenter for flexibility</td></tr>
+<tr><td>10-15 clusters</td><td><b>Karpenter required</b> + Fleet coordination</td></tr>
+<tr><td>> 15 clusters</td><td>Multi-region + Multi-subscription mandatory</td></tr>
+</table>
+<p>---</p>
+<h2>Related Documents</h2>
+<ul>
+<li><a href="AKS_SPOT_NODE_ARCHITECTURE.md">AKS Spot Node Architecture</a></li>
+<li><a href="spot-research/orchestration-plan.md">Orchestration Plan</a></li>
+<li><a href="../terraform/prototypes/aks-nap/">Karpenter Prototype</a></li>
+</ul>
+<p>---</p>
+<p><i>End of Document</i></p>
+</body></html>

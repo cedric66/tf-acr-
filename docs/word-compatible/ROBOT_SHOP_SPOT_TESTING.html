@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+body { font-family: "Calibri", "Arial", sans-serif; font-size: 11pt; line-height: 1.5; color: #000; max-width: 800px; margin: 20px auto; }
+h1 { font-size: 24pt; color: #2E74B5; border-bottom: 2px solid #2E74B5; padding-bottom: 10px; margin-top: 24pt; }
+h2 { font-size: 18pt; color: #2E74B5; margin-top: 18pt; }
+h3 { font-size: 14pt; color: #1F4D78; margin-top: 14pt; }
+h4 { font-size: 12pt; font-weight: bold; margin-top: 12pt; }
+p { margin-bottom: 10pt; }
+ul, ol { margin-bottom: 10pt; }
+li { margin-bottom: 4pt; }
+pre { font-family: "Consolas", "Courier New", monospace; font-size: 10pt; background-color: #f5f5f5; padding: 10px; border: 1px solid #ddd; white-space: pre-wrap; word-wrap: break-word; }
+code { font-family: "Consolas", "Courier New", monospace; color: #c7254e; background-color: #f9f2f4; padding: 2px 4px; border-radius: 4px; }
+pre code { background-color: transparent; color: inherit; padding: 0; }
+.mermaid { border: 1px solid #007acc; background-color: #e6f7ff; padding: 15px; border-radius: 5px; margin: 10px 0; }
+.mermaid-title { color: #007acc; font-weight: bold; font-family: sans-serif; margin-bottom: 5px; }
+table { border-collapse: collapse; width: 100%; margin-bottom: 15px; }
+th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+th { background-color: #f2f2f2; color: #333; }
+blockquote { border-left: 4px solid #ddd; padding-left: 15px; color: #666; font-style: italic; }
+</style>
+</head><body>
+<h1>🤖 Robot Shop Spot Node Testing Guide</h1>
+<p>This guide describes how to use the <a href="https://github.com/instana/robot-shop">Instana Robot Shop</a> microservices application to test AKS Spot node eviction, failover, and recovery scenarios.</p>
+<h2>✅ Prerequisites</h2>
+<ol>
+<li>An AKS cluster with:</li>
+<ul>
+<li>A <code>System</code> node pool (for control plane components).</li>
+<li>At least one <code>Spot</code> node pool.</li>
+<li>At least one <code>Standard</code> (On-Demand) node pool.</li>
+<ol>
+<li><code>kubectl</code> configured to access your cluster.</li>
+<li><code>helm</code> (v3+) installed locally.</li>
+</ol>
+</ul>
+</ol>
+<p>---</p>
+<h2>🚀 Deployment</h2>
+<h3>1. Add the Robot Shop Helm Repository</h3>
+<pre class="bash"><code>
+helm repo add robot-shop https://raw.githubusercontent.com/instana/robot-shop/master/K8s/helm
+
+helm repo update
+
+</code></pre>
+<h3>2. Deploy with Our Custom Values</h3>
+<p>Use the pre-configured <code>values.yaml</code> from this repository to deploy workloads with the correct Spot/Standard affinity:</p>
+<pre class="bash"><code>
+helm install robot-shop robot-shop/robot-shop \
+
+  -n robot-shop --create-namespace \
+
+  -f tests/robot-shop-spot-config/values.yaml
+
+</code></pre>
+<h3>3. Verify Pod Distribution</h3>
+<p>After deployment, check that stateless services are on Spot nodes and stateful services are on Standard nodes:</p>
+<pre class="bash"><code>
+kubectl get pods -n robot-shop -o wide
+
+</code></pre>
+<ul>
+<li><code>web</code>, <code>cart</code>, <code>catalogue</code>, <code>user</code>, <code>payment</code>, <code>shipping</code>, <code>ratings</code>, <code>dispatch</code> → Should prefer <b>Spot</b> nodes.</li>
+<li><code>mongodb</code>, <code>mysql</code>, <code>redis</code>, <code>rabbitmq</code> → Should be on <b>Standard</b> nodes only.</li>
+</ul>
+<p>---</p>
+<h2>🧪 Test Scenarios</h2>
+<p>These scenarios correspond to those in <a href="SPOT_EVICITION_SCENARIOS.md">docs/SPOT_EVICITION_SCENARIOS.md</a>.</p>
+<h3>Scenario 1: Failover (Spot Pool 1 → Spot Pool 2)</h3>
+<p><b>Goal:</b> Verify pods reschedule to another Spot pool when one is drained.</p>
+<pre class="bash"><code>
+# Drain a single Spot node
+
+kubectl drain &lt;spot-node-name&gt; --ignore-daemonsets --delete-emptydir-data
+
+</code></pre>
+<p><b>Expected:</b> Stateless pods migrate to another Spot node (if available) or Standard nodes.</p>
+<p>---</p>
+<h3>Scenario 2: Fallback (All Spot → Standard)</h3>
+<p><b>Goal:</b> Simulate total Spot capacity loss.</p>
+<pre class="bash"><code>
+# Drain all Spot nodes
+
+kubectl get nodes -l kubernetes.azure.com/scalesetpriority=spot -o name | xargs -I {} kubectl drain {} --ignore-daemonsets --delete-emptydir-data
+
+</code></pre>
+<p><b>Expected:</b> Stateless pods migrate to Standard nodes. Stateful pods (already on Standard) are unaffected.</p>
+<p>---</p>
+<h3>Scenario 3: Recovery (Standard → Spot)</h3>
+<p><b>Goal:</b> Verify that the Descheduler moves pods back to Spot nodes when capacity returns.</p>
+<ol>
+<li><b>Uncordon the Spot nodes:</b></li>
+<pre class="bash"><code>
+    kubectl get nodes -l kubernetes.azure.com/scalesetpriority=spot -o name | xargs -I {} kubectl uncordon {}
+
+</code></pre>
+<li><b>Apply the Descheduler:</b> (Requires <a href="https://github.com/kubernetes-sigs/descheduler">Kubernetes Descheduler</a> to be installed)</li>
+<pre class="bash"><code>
+    kubectl apply -f tests/manifests/descheduler-policy.yaml
+
+</code></pre>
+</ol>
+<p><b>Expected:</b> Stateless pods on Standard nodes are gracefully evicted and rescheduled back to the newly available Spot nodes.</p>
+<p>---</p>
+<h2>📊 Load Testing</h2>
+<p>Robot Shop includes a <a href="https://github.com/instana/robot-shop/tree/master/load-gen">Locust-based load generator</a> to simulate realistic user traffic during eviction tests.</p>
+<pre class="bash"><code>
+# Run load generator (adjust HOST to your web service IP/hostname)
+
+kubectl apply -f https://raw.githubusercontent.com/instana/robot-shop/master/K8s/load-gen.yaml
+
+</code></pre>
+<p>Monitor the <code>cart</code> and <code>payment</code> Prometheus metrics (on <code>/metrics</code>) to measure the impact of evictions on transaction success rates.</p>
+<p>---</p>
+<h2>🧹 Cleanup</h2>
+<pre class="bash"><code>
+helm uninstall robot-shop -n robot-shop
+
+kubectl delete namespace robot-shop
+
+</code></pre>
+<p>---</p>
+<p><b>Last Updated</b>: 2026-01-27  </p>
+<p><b>Status</b>: ✅ Ready for Testing</p>
+</body></html>

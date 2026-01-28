@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+body { font-family: "Calibri", "Arial", sans-serif; font-size: 11pt; line-height: 1.5; color: #000; max-width: 800px; margin: 20px auto; }
+h1 { font-size: 24pt; color: #2E74B5; border-bottom: 2px solid #2E74B5; padding-bottom: 10px; margin-top: 24pt; }
+h2 { font-size: 18pt; color: #2E74B5; margin-top: 18pt; }
+h3 { font-size: 14pt; color: #1F4D78; margin-top: 14pt; }
+h4 { font-size: 12pt; font-weight: bold; margin-top: 12pt; }
+p { margin-bottom: 10pt; }
+ul, ol { margin-bottom: 10pt; }
+li { margin-bottom: 4pt; }
+pre { font-family: "Consolas", "Courier New", monospace; font-size: 10pt; background-color: #f5f5f5; padding: 10px; border: 1px solid #ddd; white-space: pre-wrap; word-wrap: break-word; }
+code { font-family: "Consolas", "Courier New", monospace; color: #c7254e; background-color: #f9f2f4; padding: 2px 4px; border-radius: 4px; }
+pre code { background-color: transparent; color: inherit; padding: 0; }
+.mermaid { border: 1px solid #007acc; background-color: #e6f7ff; padding: 15px; border-radius: 5px; margin: 10px 0; }
+.mermaid-title { color: #007acc; font-weight: bold; font-family: sans-serif; margin-bottom: 5px; }
+table { border-collapse: collapse; width: 100%; margin-bottom: 15px; }
+th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+th { background-color: #f2f2f2; color: #333; }
+blockquote { border-left: 4px solid #ddd; padding-left: 15px; color: #666; font-style: italic; }
+</style>
+</head><body>
+<h1>AKS Spot Node Cost Optimization Architecture</h1>
+<blockquote><b>Document Version:</b> 1.0</blockquote>
+<blockquote><b>Created:</b> 2026-01-12</blockquote>
+<blockquote><b>Branch:</b> <code>feature/aks-spot-node-cost-optimization</code></blockquote>
+<p>---</p>
+<h2>Executive Summary</h2>
+<p>This document outlines an architectural approach to reduce AKS cluster costs by <b>40-80%</b> through strategic use of Azure Spot VM instances while maintaining workload availability and resilience. The solution implements a multi-zone, multi-pool topology with intelligent pod scheduling that gracefully handles spot evictions.</p>
+<p>---</p>
+<h2>Table of Contents</h2>
+<ol>
+<li><a href="#current-state-analysis">Current State Analysis</a></li>
+<li><a href="#proposed-architecture">Proposed Architecture</a></li>
+<li><a href="#node-pool-strategy">Node Pool Strategy</a></li>
+<li><a href="#pod-topology--scheduling">Pod Topology & Scheduling</a></li>
+<li><a href="#implementation-plan">Implementation Plan</a></li>
+<li><a href="#failure-cases--mitigations">Failure Cases & Mitigations</a></li>
+<li><a href="#cost-analysis">Cost Analysis</a></li>
+<li><a href="#terraform-implementation">Terraform Implementation</a></li>
+</ol>
+<p>---</p>
+<h2>Current State Analysis</h2>
+<h3>Typical AKS Cost Distribution</h3>
+<table>
+<tr><td>Component</td><td>% of Total Cost</td></tr>
+<tr><td>Compute (VMs)</td><td>60-75%</td></tr>
+<tr><td>Storage</td><td>10-15%</td></tr>
+<tr><td>Networking</td><td>5-10%</td></tr>
+<tr><td>Other Services</td><td>5-10%</td></tr>
+</table>
+<p><b>Key Insight:</b> Compute costs dominate AKS spending. Spot VMs offer <b>up to 90% discount</b> compared to on-demand pricing.</p>
+<p>---</p>
+<h2>Proposed Architecture</h2>
+<h3>High-Level Design</h3>
+<pre class=""><code>
+┌─────────────────────────────────────────────────────────────────────────────┐
+
+│                           AKS Cluster                                       │
+
+├─────────────────────────────────────────────────────────────────────────────┤
+
+│                                                                             │
+
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐             │
+
+│  │   System Pool   │  │  Standard Pool  │  │  Standard Pool  │             │
+
+│  │  (Always-On)    │  │   (Zone 1)      │  │   (Zone 2)      │             │
+
+│  │                 │  │                 │  │                 │             │
+
+│  │ • System pods   │  │ • Critical      │  │ • Critical      │             │
+
+│  │ • CoreDNS       │  │   workloads     │  │   workloads     │             │
+
+│  │ • kube-proxy    │  │ • Overflow      │  │ • Overflow      │             │
+
+│  │ • CNI           │  │   from spot     │  │   from spot     │             │
+
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘             │
+
+│                                                                             │
+
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐             │
+
+│  │  Spot Pool 1    │  │  Spot Pool 2    │  │  Spot Pool 3    │             │
+
+│  │  (Zone 1)       │  │  (Zone 2)       │  │  (Zone 3)       │             │
+
+│  │  VM Size: A     │  │  VM Size: B     │  │  VM Size: C     │             │
+
+│  │                 │  │                 │  │                 │             │
+
+│  │ • Stateless     │  │ • Stateless     │  │ • Stateless     │             │
+
+│  │   workloads     │  │   workloads     │  │   workloads     │             │
+
+│  │ • Batch jobs    │  │ • Batch jobs    │  │ • Batch jobs    │             │
+
+│  │ • Dev/Test      │  │ • Dev/Test      │  │ • Dev/Test      │             │
+
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘             │
+
+│                                                                             │
+
+└─────────────────────────────────────────────────────────────────────────────┘
+
+</code></pre>
+<h3>Core Principles</h3>
+<ol>
+<li><b>Defense in Depth</b>: Multiple spot pools with different VM sizes reduce simultaneous eviction risk</li>
+<li><b>Graceful Degradation</b>: Standard pools absorb overflow when spot capacity is unavailable</li>
+<li><b>Topology Awareness</b>: Pod scheduling spans across node types for continuous availability</li>
+<li><b>Cost-First, Availability-Second</b>: Prefer spot nodes but never sacrifice availability</li>
+</ol>
+<p>---</p>
+<h2>Node Pool Strategy</h2>
+<h3>Pool Configuration Matrix</h3>
+<table>
+<tr><td>Pool Name</td><td>Type</td><td>Priority</td><td>VM Size</td><td>Zones</td><td>Min Nodes</td><td>Max Nodes</td><td>Purpose</td></tr>
+<tr><td><code>system</code></td><td>Standard</td><td>High</td><td>Standard_D4s_v5</td><td>1,2,3</td><td>3</td><td>6</td><td>System components</td></tr>
+<tr><td><code>standard-workload</code></td><td>Standard</td><td>Medium</td><td>Standard_D4s_v5</td><td>1,2</td><td>2</td><td>10</td><td>Critical workloads, overflow</td></tr>
+<tr><td><code>spot-general-a</code></td><td>Spot</td><td>Low</td><td>Standard_D4s_v5</td><td>1</td><td>0</td><td>20</td><td>General workloads</td></tr>
+<tr><td><code>spot-general-b</code></td><td>Spot</td><td>Low</td><td>Standard_D8s_v5</td><td>2</td><td>0</td><td>15</td><td>General workloads</td></tr>
+<tr><td><code>spot-compute-c</code></td><td>Spot</td><td>Low</td><td>Standard_F8s_v2</td><td>3</td><td>0</td><td>10</td><td>Compute-intensive</td></tr>
+<h3>Why Multiple Spot Pools with Different VM Sizes?</h3>
+<p><b>Azure Spot Eviction Behavior:</b></p>
+<ul>
+<li>Evictions are triggered by capacity demands for <b>specific VM sizes</b> in <b>specific regions/zones</b></li>
+<li>Different VM sizes have independent eviction rates</li>
+<li>Diversifying VM sizes significantly reduces the probability of simultaneous eviction</li>
+</ul>
+<p><b>Statistical Advantage:</b></p>
+<pre class=""><code>
+Single VM Size Eviction Risk:    ~15-20% per hour during peak
+
+Two Different VM Sizes:          ~2-4% simultaneous eviction
+
+Three Different VM Sizes:        ~0.3-0.8% simultaneous eviction
+
+</code></pre>
+<h3>Node Pool Labels and Taints</h3>
+<pre class="yaml"><code>
+# System Pool (no scheduling of user workloads)
+
+labels:
+
+  kubernetes.azure.com/mode: system
+
+  node-pool-type: system
+
+taints:
+
+  - key: CriticalAddonsOnly
+
+    value: &quot;true&quot;
+
+    effect: NoSchedule
+
+
+
+# Standard Workload Pool
+
+labels:
+
+  workload-type: standard
+
+  node-pool-type: user
+
+  priority: on-demand
+
+taints: none  # Accepts both standard and spot-tolerant workloads
+
+
+
+# Spot Pools
+
+labels:
+
+  workload-type: spot
+
+  node-pool-type: user
+
+  priority: spot
+
+  kubernetes.azure.com/scalesetpriority: spot
+
+taints:
+
+  - key: kubernetes.azure.com/scalesetpriority
+
+    value: spot
+
+    effect: NoSchedule
+
+</code></pre>
+<p>---</p>
+<h2>Pod Topology & Scheduling</h2>
+<h3>Topology Spread Constraints Strategy</h3>
+<p>The key to maintaining availability during spot evictions is using <b>topology spread constraints</b> combined with <b>node affinity</b> and <b>pod anti-affinity</b>.</p>
+<h3>Deployment Template for Spot+Standard Distribution</h3>
+<pre class="yaml"><code>
+apiVersion: apps/v1
+
+kind: Deployment
+
+metadata:
+
+  name: example-workload
+
+  labels:
+
+    app: example
+
+    cost-optimization: spot-preferred
+
+spec:
+
+  replicas: 6
+
+  selector:
+
+    matchLabels:
+
+      app: example
+
+  template:
+
+    metadata:
+
+      labels:
+
+        app: example
+
+    spec:
+
+      # TOLERATION: Allow scheduling on spot nodes
+
+      tolerations:
+
+        - key: kubernetes.azure.com/scalesetpriority
+
+          operator: Equal
+
+          value: spot
+
+          effect: NoSchedule
+
+
+
+      # AFFINITY: Prefer spot nodes, but allow standard as fallback
+
+      affinity:
+
+        nodeAffinity:
+
+          # PREFER spot nodes (soft constraint)
+
+          preferredDuringSchedulingIgnoredDuringExecution:
+
+            - weight: 100
+
+              preference:
+
+                matchExpressions:
+
+                  - key: kubernetes.azure.com/scalesetpriority
+
+                    operator: In
+
+                    values:
+
+                      - spot
+
+            - weight: 50
+
+              preference:
+
+                matchExpressions:
+
+                  - key: priority
+
+                    operator: In
+
+                    values:
+
+                      - on-demand
+
+
+
+        # ANTI-AFFINITY: Spread pods across nodes
+
+        podAntiAffinity:
+
+          preferredDuringSchedulingIgnoredDuringExecution:
+
+            - weight: 100
+
+              podAffinityTerm:
+
+                labelSelector:
+
+                  matchExpressions:
+
+                    - key: app
+
+                      operator: In
+
+                      values:
+
+                        - example
+
+                topologyKey: kubernetes.io/hostname
+
+
+
+      # TOPOLOGY SPREAD: Distribute across zones and node types
+
+      topologySpreadConstraints:
+
+        # Spread across availability zones
+
+        - maxSkew: 1
+
+          topologyKey: topology.kubernetes.io/zone
+
+          whenUnsatisfiable: ScheduleAnyway
+
+          labelSelector:
+
+            matchLabels:
+
+              app: example
+
+
+
+        # Spread across node pool types (spot vs standard)
+
+        - maxSkew: 2
+
+          topologyKey: kubernetes.azure.com/scalesetpriority
+
+          whenUnsatisfiable: ScheduleAnyway
+
+          labelSelector:
+
+            matchLabels:
+
+              app: example
+
+
+
+        # Spread across individual nodes
+
+        - maxSkew: 1
+
+          topologyKey: kubernetes.io/hostname
+
+          whenUnsatisfiable: ScheduleAnyway
+
+          labelSelector:
+
+            matchLabels:
+
+              app: example
+
+
+
+      containers:
+
+        - name: example
+
+          image: example:latest
+
+          resources:
+
+            requests:
+
+              cpu: &quot;500m&quot;
+
+              memory: &quot;512Mi&quot;
+
+            limits:
+
+              cpu: &quot;1000m&quot;
+
+              memory: &quot;1Gi&quot;
+
+
+
+          # Graceful shutdown for spot eviction
+
+          lifecycle:
+
+            preStop:
+
+              exec:
+
+                command: [&quot;/bin/sh&quot;, &quot;-c&quot;, &quot;sleep 25&quot;]
+
+
+
+          terminationGracePeriodSeconds: 30
+
+</code></pre>
+<h3>Topology Spread Mathematics</h3>
+<p>For a workload with <b>6 replicas</b> across the pools:</p>
+<p><b>Ideal Distribution (all pools healthy):</b></p>
+<pre class=""><code>
+┌─────────────────┬─────────────────┬─────────────────┐
+
+│  Spot Pool A    │  Spot Pool B    │  Standard Pool  │
+
+│                 │                 │                 │
+
+│    2 pods       │    2 pods       │    2 pods       │
+
+└─────────────────┴─────────────────┴─────────────────┘
+
+</code></pre>
+<p><b>During Spot Pool A Eviction:</b></p>
+<pre class=""><code>
+┌─────────────────┬─────────────────┬─────────────────┐
+
+│  Spot Pool A    │  Spot Pool B    │  Standard Pool  │
+
+│   (evicted)     │                 │                 │
+
+│    0 pods       │    3 pods       │    3 pods       │
+
+└─────────────────┴─────────────────┴─────────────────┘
+
+</code></pre>
+<p><b>During Both Spot Pools Eviction (rare):</b></p>
+<pre class=""><code>
+┌─────────────────┬─────────────────┬─────────────────┐
+
+│  Spot Pool A    │  Spot Pool B    │  Standard Pool  │
+
+│   (evicted)     │   (evicted)     │   (scales up)   │
+
+│    0 pods       │    0 pods       │    6 pods       │
+
+└─────────────────┴─────────────────┴─────────────────┘
+
+</code></pre>
+<p>---</p>
+<h2>Implementation Plan</h2>
+<h3>Phase 1: Foundation (Week 1)</h3>
+<table>
+<tr><td>Task</td><td>Description</td><td>Owner</td></tr>
+<tr><td>1.1</td><td>Create Terraform modules for spot node pools</td><td>Platform Team</td></tr>
+<tr><td>1.2</td><td>Configure cluster autoscaler settings</td><td>Platform Team</td></tr>
+<tr><td>1.3</td><td>Set up monitoring and alerting for evictions</td><td>SRE Team</td></tr>
+<tr><td>1.4</td><td>Create Pod Disruption Budgets</td><td>App Teams</td></tr>
+<h3>Phase 2: Pilot (Week 2-3)</h3>
+<table>
+<tr><td>Task</td><td>Description</td><td>Owner</td></tr>
+<tr><td>2.1</td><td>Deploy spot pools with min_count=0</td><td>Platform Team</td></tr>
+<tr><td>2.2</td><td>Migrate dev/test workloads to spot</td><td>App Teams</td></tr>
+<tr><td>2.3</td><td>Monitor eviction patterns and costs</td><td>SRE Team</td></tr>
+<tr><td>2.4</td><td>Tune topology spread constraints</td><td>Platform Team</td></tr>
+<h3>Phase 3: Production Rollout (Week 4-6)</h3>
+<table>
+<tr><td>Task</td><td>Description</td><td>Owner</td></tr>
+<tr><td>3.1</td><td>Update production deployments with topology</td><td>App Teams</td></tr>
+<tr><td>3.2</td><td>Enable spot pools for production workloads</td><td>Platform Team</td></tr>
+<tr><td>3.3</td><td>Implement chaos engineering tests</td><td>SRE Team</td></tr>
+<tr><td>3.4</td><td>Document runbooks and procedures</td><td>All Teams</td></tr>
+<h3>Phase 4: Optimization (Ongoing)</h3>
+<table>
+<tr><td>Task</td><td>Description</td><td>Owner</td></tr>
+<tr><td>4.1</td><td>Analyze eviction patterns</td><td>SRE Team</td></tr>
+<tr><td>4.2</td><td>Optimize VM size selection</td><td>Platform Team</td></tr>
+<tr><td>4.3</td><td>Implement predictive scaling</td><td>Platform Team</td></tr>
+<tr><td>4.4</td><td>Regular cost reviews</td><td>FinOps Team</td></tr>
+</table>
+<p>---</p>
+<h2>Failure Cases & Mitigations</h2>
+<h3>Failure Case 1: Simultaneous Multi-Pool Eviction</h3>
+<p><b>Scenario:</b> Azure needs capacity across multiple VM sizes simultaneously, evicting all spot pools.</p>
+<p><b>Probability:</b> ~0.5-2% during major Azure events</p>
+<p><b>Impact:</b> All spot pods need immediate rescheduling to standard pools.</p>
+<p><b>Mitigations:</b></p>
+<ol>
+<li><b>Standard pool auto-scaling</b> configured with aggressive scale-up</li>
+<li><b>Pod Disruption Budgets</b> ensure minimum replicas during transitions</li>
+<li><b>Cluster autoscaler priority expander</b> prioritizes standard pools</li>
+<li><b>Overprovisioning buffer</b> on standard pools</li>
+</ol>
+<pre class="yaml"><code>
+# PodDisruptionBudget
+
+apiVersion: policy/v1
+
+kind: PodDisruptionBudget
+
+metadata:
+
+  name: example-pdb
+
+spec:
+
+  minAvailable: 50%
+
+  selector:
+
+    matchLabels:
+
+      app: example
+
+</code></pre>
+<p>---</p>
+<h3>Failure Case 2: Autoscaler Delay on Standard Pool</h3>
+<p><b>Scenario:</b> Standard pool cannot scale fast enough to absorb evicted spot pods.</p>
+<p><b>Probability:</b> ~10-15% during rapid evictions</p>
+<p><b>Impact:</b> Pods remain Pending, causing service degradation.</p>
+<p><b>Mitigations:</b></p>
+<ol>
+<li><b>Overprovisioned placeholder pods</b> on standard pools (using low-priority pods)</li>
+<li><b>Node warm pools</b> with pre-provisioned but cordoned nodes</li>
+<li><b>Aggressive autoscaler settings</b>:</li>
+</ol>
+<pre class="hcl"><code>
+# Terraform - Cluster Autoscaler Profile
+
+auto_scaler_profile {
+
+  balance_similar_node_groups      = true
+
+  expander                         = &quot;priority&quot;
+
+  max_graceful_termination_sec     = 30
+
+  max_node_provisioning_time       = &quot;15m&quot;
+
+  max_unready_nodes                = 3
+
+  max_unready_percentage           = 45
+
+  new_pod_scale_up_delay           = &quot;0s&quot;
+
+  scale_down_delay_after_add       = &quot;10m&quot;
+
+  scale_down_delay_after_delete    = &quot;10s&quot;
+
+  scale_down_delay_after_failure   = &quot;3m&quot;
+
+  scale_down_unneeded              = &quot;10m&quot;
+
+  scale_down_unready               = &quot;20m&quot;
+
+  scale_down_utilization_threshold = 0.5
+
+  scan_interval                    = &quot;10s&quot;
+
+  skip_nodes_with_local_storage    = false
+
+  skip_nodes_with_system_pods      = true
+
+}
+
+</code></pre>
+<p>---</p>
+<h3>Failure Case 3: Spot VM Unavailability at Creation</h3>
+<p><b>Scenario:</b> No spot capacity available when cluster autoscaler tries to add spot nodes.</p>
+<p><b>Probability:</b> ~5-10% during peak hours</p>
+<p><b>Impact:</b> Spot pools remain at min_count, workloads remain on expensive standard pools.</p>
+<p><b>Mitigations:</b></p>
+<ol>
+<li>Configure <b>multiple VM sizes per pool</b> (using VM Scale Set Flex)</li>
+<li>Use <b>spot with eviction type: Delete + max price = -1</b> (pay market rate)</li>
+<li>Implement <b>fallback to standard</b> automatically:</li>
+</ol>
+<pre class="yaml"><code>
+# Priority Expander ConfigMap
+
+apiVersion: v1
+
+kind: ConfigMap
+
+metadata:
+
+  name: cluster-autoscaler-priority-expander
+
+  namespace: kube-system
+
+data:
+
+  priorities: |-
+
+    10:
+
+      - spot-general-a
+
+      - spot-general-b
+
+      - spot-compute-c
+
+    20:
+
+      - standard-workload
+
+</code></pre>
+<p>---</p>
+<h3>Failure Case 4: Topology Spread Impossible</h3>
+<p><b>Scenario:</b> <code>maxSkew</code> cannot be satisfied across zones/node types.</p>
+<p><b>Probability:</b> ~2-5% during capacity constraints</p>
+<p><b>Impact:</b> Pods remain Pending if <code>whenUnsatisfiable: DoNotSchedule</code>.</p>
+<p><b>Mitigations:</b></p>
+<ol>
+<li>Always use <code>whenUnsatisfiable: ScheduleAnyway</code> for production</li>
+<li>Monitor uneven distribution with metrics</li>
+<li>Set reasonable <code>maxSkew</code> values (1-3)</li>
+</ol>
+<p>---</p>
+<h3>Failure Case 5: Stateful Workload Data Loss</h3>
+<p><b>Scenario:</b> Stateful pod on spot node evicted before data sync.</p>
+<p><b>Probability:</b> ~20% per eviction event for stateful apps</p>
+<p><b>Impact:</b> Data loss, corruption, or inconsistency.</p>
+<p><b>Mitigations:</b></p>
+<ol>
+<li><b>NEVER schedule stateful workloads on spot nodes</b>:</li>
+</ol>
+<pre class="yaml"><code>
+affinity:
+
+  nodeAffinity:
+
+    requiredDuringSchedulingIgnoredDuringExecution:
+
+      nodeSelectorTerms:
+
+        - matchExpressions:
+
+            - key: kubernetes.azure.com/scalesetpriority
+
+              operator: NotIn
+
+              values:
+
+                - spot
+
+</code></pre>
+<ol>
+<li>Use <b>node taints</b> to repel stateful workloads from spot pools</li>
+<li>Implement proper <b>volume snapshotting</b> regardless</li>
+</ol>
+<p>---</p>
+<h3>Failure Case 6: Cost Exceeds Budget (Spot Price Spike)</h3>
+<p><b>Scenario:</b> Spot prices increase to near on-demand levels.</p>
+<p><b>Probability:</b> ~3-5% during high-demand periods</p>
+<p><b>Impact:</b> Minimal cost savings despite complexity.</p>
+<p><b>Mitigations:</b></p>
+<ol>
+<li>Set <b>max_price</b> to acceptable threshold (e.g., 50% of on-demand)</li>
+<li>Monitor <b>cost per pod</b> metrics</li>
+<li>Configure alerts for <b>price threshold breaches</b></li>
+</ol>
+<p>---</p>
+<h3>Failure Case 7: 30-Second Eviction Window Insufficient</h3>
+<p><b>Scenario:</b> Application requires more than 30 seconds for graceful shutdown.</p>
+<p><b>Probability:</b> 100% for long-shutdown apps</p>
+<p><b>Impact:</b> Incomplete request processing, data corruption.</p>
+<p><b>Mitigations:</b></p>
+<ol>
+<li>Implement <b>pre-stop hooks</b> for graceful shutdown</li>
+<li>Configure <b>terminationGracePeriodSeconds</b> appropriately</li>
+<li>Rely on <b>Native AKS Spot Node Auto-Drain</b> (enabled by default) which detects Scheduled Events and gracefully drains the node.</li>
+</ol>
+<p>---</p>
+<h2>Cost Analysis</h2>
+<h3>Projected Savings Model</h3>
+<table>
+<tr><td>Configuration</td><td>Monthly Cost</td><td>Savings vs Baseline</td></tr>
+<tr><td>Baseline (all Standard)</td><td>$10,000</td><td>-</td></tr>
+<tr><td>50% Spot Adoption</td><td>$6,500</td><td>35%</td></tr>
+<tr><td>70% Spot Adoption</td><td>$5,000</td><td>50%</td></tr>
+<tr><td>80% Spot Adoption (optimal)</td><td>$4,200</td><td>58%</td></tr>
+<h3>Cost vs Complexity Trade-off</h3>
+<pre class=""><code>
+         ▲ Savings (%)
+
+    80%  │                    ┌───────────
+
+         │                   /│ Diminishing
+
+    60%  │              ────/ │ Returns
+
+         │            /       │
+
+    40%  │         /          │
+
+         │      /             │
+
+    20%  │   /                │
+
+         │ /                  │
+
+     0%  └────────────────────┴────────────▶
+
+         1     2     3     4     5+
+
+                Spot Pools
+
+</code></pre>
+<p><b>Sweet Spot:</b> 2-3 spot pools provide optimal savings-to-complexity ratio.</p>
+<p>---</p>
+<h2>Terraform Implementation</h2>
+<h3>Module Structure</h3>
+<pre class=""><code>
+terraform/
+
+├── modules/
+
+│   └── aks-spot-optimized/
+
+│       ├── main.tf
+
+│       ├── variables.tf
+
+│       ├── outputs.tf
+
+│       ├── node-pools.tf
+
+│       └── autoscaler.tf
+
+├── environments/
+
+│   ├── dev/
+
+│   │   └── main.tf
+
+│   ├── staging/
+
+│   │   └── main.tf
+
+│   └── prod/
+
+│       └── main.tf
+
+└── kubernetes/
+
+    ├── priority-expander.yaml
+
+    ├── pod-templates/
+
+    │   ├── spot-tolerant-deployment.yaml
+
+    │   └── standard-only-deployment.yaml
+
+    └── pdb-templates/
+
+        └── standard-pdb.yaml
+
+</code></pre>
+<h3>Core Terraform Configuration</h3>
+<p>See <a href="../terraform/modules/aks-spot-optimized/">terraform/modules/aks-spot-optimized/</a> for complete implementation.</p>
+<p>---</p>
+<h2>Monitoring & Observability</h2>
+<h3>Key Metrics to Monitor</h3>
+<table>
+<tr><td>Metric</td><td>Alert Threshold</td><td>Action</td></tr>
+<tr><td>Spot eviction rate</td><td>>5/hour</td><td>Review capacity</td></tr>
+<tr><td>Pending pods duration</td><td>>2 min</td><td>Scale standard pools</td></tr>
+<tr><td>Standard pool utilization</td><td>>80%</td><td>Add capacity</td></tr>
+<tr><td>Cost per workload</td><td>>20% baseline</td><td>Review sizing</td></tr>
+<tr><td>Topology imbalance</td><td>maxSkew >3</td><td>Rebalance pods</td></tr>
+<h3>Recommended Dashboards</h3>
+<ol>
+<li><b>Spot Health Dashboard</b>: Evictions, capacity, price trends</li>
+<li><b>Pod Distribution Dashboard</b>: Topology spread visualization</li>
+<li><b>Cost Optimization Dashboard</b>: Savings vs baseline, trends</li>
+</ol>
+<p>---</p>
+<h2>Decision Matrix: What to Run Where</h2>
+<table>
+<tr><td>Workload Type</td><td>Recommended Pool</td><td>Reason</td></tr>
+<tr><td>Stateful apps</td><td>Standard only</td><td>Data safety</td></tr>
+<tr><td>Stateless APIs</td><td>Spot preferred</td><td>Cost savings</td></tr>
+<tr><td>Batch jobs</td><td>Spot only</td><td>Interruptible</td></tr>
+<tr><td>CI/CD runners</td><td>Spot preferred</td><td>Ephemeral</td></tr>
+<tr><td>Databases</td><td>Standard only</td><td>Data consistency</td></tr>
+<tr><td>Caches (Redis)</td><td>Standard preferred</td><td>Recovery time</td></tr>
+<tr><td>Queue workers</td><td>Spot preferred</td><td>Resumable</td></tr>
+<tr><td>Web frontends</td><td>Spot + Standard</td><td>Availability</td></tr>
+</table>
+<p>---</p>
+<h2>Appendix A: Quick Reference Commands</h2>
+<pre class="bash"><code>
+# Check spot node status
+
+kubectl get nodes -l kubernetes.azure.com/scalesetpriority=spot
+
+
+
+# View pod distribution across zones
+
+kubectl get pods -o wide | grep -E &quot;ZONE|zone&quot;
+
+
+
+# Check pending pods
+
+kubectl get pods --field-selector=status.phase=Pending
+
+
+
+# Simulate eviction (testing)
+
+kubectl drain &lt;node-name&gt; --ignore-daemonsets --delete-emptydir-data
+
+
+
+# View autoscaler status
+
+kubectl -n kube-system logs -l app=cluster-autoscaler --tail=100
+
+</code></pre>
+<p>---</p>
+<h2>Appendix B: Related Documents</h2>
+<ul>
+<li><a href="https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/">Kubernetes Topology Spread Constraints</a></li>
+<li><a href="https://docs.microsoft.com/en-us/azure/aks/spot-node-pool">Azure Spot VMs Best Practices</a></li>
+<li><a href="https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md">Cluster Autoscaler FAQ</a></li>
+</ul>
+<p>---</p>
+<h2>Document Approval</h2>
+<table>
+<tr><td>Role</td><td>Name</td><td>Date</td><td>Signature</td></tr>
+<tr><td>Platform Architect</td><td></td><td></td><td></td></tr>
+<tr><td>SRE Lead</td><td></td><td></td><td></td></tr>
+<tr><td>FinOps Lead</td><td></td><td></td><td></td></tr>
+<tr><td>Security Reviewer</td><td></td><td></td><td></td></tr>
+</table>
+<p>---</p>
+<p><i>End of Document</i></p>
+</body></html>

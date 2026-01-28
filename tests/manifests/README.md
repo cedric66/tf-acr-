@@ -44,43 +44,6 @@ kubectl describe vpa <vpa-name> -n <namespace>
 
 ---
 
-### 2. Azure Node Termination Handler (NTH)
-
-**File:** `node-termination-handler.yaml`
-
-NTH proactively drains nodes before Azure evicts them, providing graceful shutdown for applications. Without NTH, pods only get 30 seconds notice.
-
-#### Features
-
-- Polls Azure Scheduled Events API every 5 seconds
-- Cordons and drains nodes on termination notice
-- Sends webhook notifications to Slack/Teams
-- Runs with `system-node-critical` priority
-
-#### Installation
-
-```bash
-# Create webhook secret (optional - for Slack/Teams notifications)
-kubectl create secret generic nth-webhook-secret \
-  --from-literal=webhook-url='YOUR_SLACK_OR_TEAMS_WEBHOOK_URL' \
-  -n node-termination-handler
-
-# Deploy NTH
-kubectl apply -f node-termination-handler.yaml
-```
-
-#### Verification
-
-```bash
-# Check DaemonSet status
-kubectl get daemonset -n node-termination-handler
-
-# View logs for a specific node
-kubectl logs -n node-termination-handler -l app.kubernetes.io/name=node-termination-handler
-```
-
----
-
 ## Integration with Existing Setup
 
 These components complement the existing AKS Spot optimization:
@@ -90,15 +53,15 @@ These components complement the existing AKS Spot optimization:
 │                    AKS Spot Optimization                     │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐      │
-│  │   Cluster   │    │    VPA      │    │    NTH      │      │
-│  │  Autoscaler │    │             │    │             │      │
-│  │             │    │  Right-size │    │  Graceful   │      │
-│  │  Node       │    │  Pod        │    │  Eviction   │      │
-│  │  Scaling    │    │  Resources  │    │  Handling   │      │
-│  └─────────────┘    └─────────────┘    └─────────────┘      │
-│         │                  │                  │              │
-│         └──────────────────┼──────────────────┘              │
+│  ┌─────────────┐    ┌─────────────┐                          │
+│  │   Cluster   │    │    VPA      │                          │
+│  │  Autoscaler │    │             │                          │
+│  │             │    │  Right-size │                          │
+│  │  Node       │    │  Pod        │                          │
+│  │  Scaling    │    │  Resources  │                          │
+│  └─────────────┘    └─────────────┘                          │
+│         │                  │                                 │
+│         └──────────────────┼─────────────────────────────────┘
 │                            │                                 │
 │                  ┌─────────▼─────────┐                       │
 │                  │   Spot Nodes      │                       │
@@ -121,5 +84,4 @@ These components complement the existing AKS Spot optimization:
 ## References
 
 - [Kubernetes VPA Documentation](https://github.com/kubernetes/autoscaler/tree/master/vertical-pod-autoscaler)
-- [Azure Node Termination Handler](https://github.com/microsoft/node-termination-handler)
 - [Microsoft AKS Spot Node Pool Documentation](https://learn.microsoft.com/en-us/azure/aks/spot-node-pool)

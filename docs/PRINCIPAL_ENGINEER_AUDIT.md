@@ -143,7 +143,7 @@ Following a comprehensive review of the [kubernetes/autoscaler](https://github.c
 | Component | File(s) | Purpose |
 |-----------|---------|---------|
 | **Vertical Pod Autoscaler (VPA)** | `tests/manifests/vertical-pod-autoscaler.yaml` | Right-sizes pod resources to maximize spot utilization |
-| **Azure Node Termination Handler** | `tests/manifests/node-termination-handler.yaml` | Proactively drains nodes before eviction |
+| **Native AKS Spot Node Auto-Drain** | Native Feature | Automatically drains nodes on eviction event (replaces deprecated NTH) |
 | **Memory-Optimized Spot Pools** | `variables.tf` (updated) | E-series VMs with lower eviction rates |
 | **Bursty Workload Profile** | `variables.tf`, `main.tf` (updated) | MS-recommended autoscaler settings |
 

@@ -495,17 +495,7 @@ affinity:
 **Mitigations:**
 1. Implement **pre-stop hooks** for graceful shutdown
 2. Configure **terminationGracePeriodSeconds** appropriately
-3. Use **Scheduled Events API** for early warning:
-
-```yaml
-# Azure Metadata Service polling for early eviction warning
-containers:
-  - name: spot-handler
-    image: spot-handler:latest
-    env:
-      - name: METADATA_ENDPOINT
-        value: "http://169.254.169.254/metadata/scheduledevents?api-version=2020-07-01"
-```
+3. Rely on **Native AKS Spot Node Auto-Drain** (enabled by default) which detects Scheduled Events and gracefully drains the node.
 
 ---
 

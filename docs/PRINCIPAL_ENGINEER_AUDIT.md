@@ -134,6 +134,38 @@ This project demonstrates strong architectural vision and comprehensive document
 
 ---
 
+## 🔍 Gap Analysis Updates (2026-01-28)
+
+Following a comprehensive review of the [kubernetes/autoscaler](https://github.com/kubernetes/autoscaler) repository and external sources, the following enhancements have been implemented:
+
+### New Components Added
+
+| Component | File(s) | Purpose |
+|-----------|---------|---------|
+| **Vertical Pod Autoscaler (VPA)** | `tests/manifests/vertical-pod-autoscaler.yaml` | Right-sizes pod resources to maximize spot utilization |
+| **Azure Node Termination Handler** | `tests/manifests/node-termination-handler.yaml` | Proactively drains nodes before eviction |
+| **Memory-Optimized Spot Pools** | `variables.tf` (updated) | E-series VMs with lower eviction rates |
+| **Bursty Workload Profile** | `variables.tf`, `main.tf` (updated) | MS-recommended autoscaler settings |
+
+### Configuration Changes
+
+| Setting | Previous | Updated | Rationale |
+|---------|----------|---------|-----------|
+| `scan_interval` | `10s` | `20s` | MS bursty workload recommendation |
+| `scale_down_unneeded` | `10m` | `5m` | Faster reclamation of unused capacity |
+| `max_graceful_termination_sec` | `60s` | `60s` | Unchanged (already optimal) |
+| Spot VM families | D-series, F-series | D, E, F-series | E-series has lower spot competition |
+
+### Priority Expander Changes
+
+The priority expander now prefers memory-optimized instances:
+- **Priority 5:** E-series (memory-optimized) – lowest eviction risk
+- **Priority 10:** D/F-series (general/compute) – standard spot
+- **Priority 20:** On-demand fallback
+- **Priority 30:** System pool (never for user workloads)
+
+
+
 ## 📝 Recommended Action Plan (UPDATED)
 
 | Priority | Action | Owner | Status |

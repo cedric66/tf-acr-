@@ -98,7 +98,7 @@ resource "azurerm_kubernetes_cluster" "main" {
     outbound_type     = var.network_profile.outbound_type
   }
 
-  # Cluster Autoscaler Profile - Optimized for Spot
+  # Cluster Autoscaler Profile - Optimized for Spot and Bursty Workloads
   auto_scaler_profile {
     balance_similar_node_groups      = var.autoscaler_profile.balance_similar_node_groups
     expander                         = var.autoscaler_profile.expander
@@ -116,7 +116,15 @@ resource "azurerm_kubernetes_cluster" "main" {
     scan_interval                    = var.autoscaler_profile.scan_interval
     skip_nodes_with_local_storage    = var.autoscaler_profile.skip_nodes_with_local_storage
     skip_nodes_with_system_pods      = var.autoscaler_profile.skip_nodes_with_system_pods
+    # New DaemonSet eviction settings (GA in Azure API 2024-05-01)
+    # These control how DaemonSets affect scale-down decisions
+    # Important for spot pools with monitoring/logging DaemonSets
+    # Note: Requires azurerm provider >= 3.100.0 - uncomment when available
+    # ignore_daemonsets_utilization        = var.autoscaler_profile.ignore_daemonsets_utilization
+    # daemonset_eviction_for_empty_nodes   = var.autoscaler_profile.daemonset_eviction_for_empty_nodes
+    # daemonset_eviction_for_occupied_nodes = var.autoscaler_profile.daemonset_eviction_for_occupied_nodes
   }
+
 
   # Azure Monitor (OMS Agent)
   dynamic "oms_agent" {

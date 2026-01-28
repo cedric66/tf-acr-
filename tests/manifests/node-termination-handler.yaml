@@ -1,0 +1,205 @@
+###############################################################################
+# Azure Node Termination Handler Deployment
+# Purpose: Proactively drain nodes before Azure evicts spot instances
+# Documentation: https://github.com/microsoft/node-termination-handler
+###############################################################################
+
+---
+# Namespace for node termination handler
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: node-termination-handler
+  labels:
+    app.kubernetes.io/name: node-termination-handler
+    app.kubernetes.io/part-of: spot-optimization
+
+---
+# ServiceAccount for node termination handler
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: node-termination-handler
+  namespace: node-termination-handler
+  labels:
+    app.kubernetes.io/name: node-termination-handler
+
+---
+# ClusterRole with permissions to cordon and drain nodes
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: node-termination-handler
+  labels:
+    app.kubernetes.io/name: node-termination-handler
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/eviction"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+
+---
+# ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: node-termination-handler
+  labels:
+    app.kubernetes.io/name: node-termination-handler
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: node-termination-handler
+subjects:
+  - kind: ServiceAccount
+    name: node-termination-handler
+    namespace: node-termination-handler
+
+---
+# DaemonSet - runs on every node to monitor for termination events
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-termination-handler
+  namespace: node-termination-handler
+  labels:
+    app.kubernetes.io/name: node-termination-handler
+    app.kubernetes.io/part-of: spot-optimization
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: node-termination-handler
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: node-termination-handler
+    spec:
+      serviceAccountName: node-termination-handler
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      priorityClassName: system-node-critical
+      
+      # Tolerate all taints so it runs on spot nodes too
+      tolerations:
+        - operator: Exists
+          effect: NoSchedule
+        - operator: Exists
+          effect: NoExecute
+        - key: CriticalAddonsOnly
+          operator: Exists
+      
+      # Prefer running on spot nodes (where it's most needed)
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: kubernetes.azure.com/scalesetpriority
+                    operator: In
+                    values:
+                      - spot
+      
+      containers:
+        - name: node-termination-handler
+          # Use the official Microsoft image
+          image: mcr.microsoft.com/aks/node-termination-handler:v1.0.0
+          imagePullPolicy: IfNotPresent
+          
+          env:
+            # Enable Azure Scheduled Events monitoring
+            - name: ENABLE_SCHEDULED_EVENT_HANDLING
+              value: "true"
+            
+            # How often to poll the metadata service (in seconds)
+            - name: POLL_INTERVAL_SECONDS
+              value: "5"
+            
+            # Grace period for draining (should be less than 30s eviction notice)
+            - name: NODE_TERMINATION_GRACE_PERIOD
+              value: "25"
+            
+            # Enable webhook notifications (optional - configure below)
+            - name: ENABLE_WEBHOOK
+              value: "true"
+            
+            # Webhook URL for Slack/Teams notifications
+            # Uncomment and set your webhook URL:
+            # - name: WEBHOOK_URL
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: nth-webhook-secret
+            #       key: webhook-url
+            
+            # Node name from downward API
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            
+            # Pod name for logging
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          
+          securityContext:
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+
+---
+# Secret for webhook URL (optional - for Slack/Teams notifications)
+# Create this secret with your actual webhook URL:
+# kubectl create secret generic nth-webhook-secret \
+#   --from-literal=webhook-url='YOUR_SLACK_OR_TEAMS_WEBHOOK_URL' \
+#   -n node-termination-handler
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nth-webhook-secret
+  namespace: node-termination-handler
+  labels:
+    app.kubernetes.io/name: node-termination-handler
+type: Opaque
+stringData:
+  webhook-url: ""
+
+---
+# PodDisruptionBudget to ensure NTH stays running during upgrades
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: node-termination-handler
+  namespace: node-termination-handler
+  labels:
+    app.kubernetes.io/name: node-termination-handler
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: node-termination-handler

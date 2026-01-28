@@ -1,0 +1,140 @@
+###############################################################################
+# Vertical Pod Autoscaler (VPA) Manifests for Spot-Optimized Workloads
+# Purpose: Right-size pod resources to maximize spot node utilization
+###############################################################################
+
+---
+# VPA Installation (using Helm is recommended, but here's the manual approach)
+# To install VPA, run:
+#   kubectl apply -f https://github.com/kubernetes/autoscaler/releases/download/vertical-pod-autoscaler-1.0.0/vpa-v1.0.0.yaml
+# Or use Helm:
+#   helm repo add cowboysysop https://cowboysysop.github.io/charts/
+#   helm install vpa cowboysysop/vertical-pod-autoscaler --namespace kube-system
+
+---
+# VPA for Spot-Tolerant Workloads (Recommendation Mode - Safe to start)
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: spot-workload-vpa-recommendations
+  namespace: production
+  labels:
+    app.kubernetes.io/part-of: spot-optimization
+    cost-optimization: enabled
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: spot-tolerant-app  # Replace with your deployment name
+  updatePolicy:
+    updateMode: "Off"  # Only provide recommendations, don't auto-update
+  resourcePolicy:
+    containerPolicies:
+      - containerName: "*"
+        minAllowed:
+          cpu: 50m
+          memory: 64Mi
+        maxAllowed:
+          cpu: 4
+          memory: 8Gi
+        controlledResources: ["cpu", "memory"]
+        controlledValues: RequestsAndLimits
+
+---
+# VPA for Batch Jobs on Spot (Auto Mode - More aggressive)
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: batch-job-vpa-auto
+  namespace: batch
+  labels:
+    app.kubernetes.io/part-of: spot-optimization
+    cost-optimization: enabled
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: batch-processor  # Replace with your batch deployment
+  updatePolicy:
+    updateMode: "Auto"  # Automatically update pod resources (will restart pods)
+    minReplicas: 2  # Maintain at least 2 replicas during updates
+  resourcePolicy:
+    containerPolicies:
+      - containerName: "*"
+        minAllowed:
+          cpu: 100m
+          memory: 128Mi
+        maxAllowed:
+          cpu: 8
+          memory: 16Gi
+        controlledResources: ["cpu", "memory"]
+        controlledValues: RequestsAndLimits
+
+---
+# VPA for API Services on Spot (Initial Mode - Best for production APIs)
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: api-service-vpa-initial
+  namespace: production
+  labels:
+    app.kubernetes.io/part-of: spot-optimization
+    cost-optimization: enabled
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api-service  # Replace with your API deployment
+  updatePolicy:
+    updateMode: "Initial"  # Only set resources at pod creation, no restarts
+  resourcePolicy:
+    containerPolicies:
+      - containerName: "*"
+        minAllowed:
+          cpu: 100m
+          memory: 256Mi
+        maxAllowed:
+          cpu: 2
+          memory: 4Gi
+        controlledResources: ["cpu", "memory"]
+        controlledValues: RequestsOnly  # Only adjust requests, keep limits ratio
+
+---
+# Template VPA for any Spot-Tolerant Deployment
+# Copy and modify this for each deployment you want to optimize
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: DEPLOYMENT_NAME-vpa  # Replace DEPLOYMENT_NAME
+  namespace: NAMESPACE  # Replace NAMESPACE
+  labels:
+    app.kubernetes.io/part-of: spot-optimization
+    cost-optimization: enabled
+    vpa-template: "true"
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: DEPLOYMENT_NAME  # Replace DEPLOYMENT_NAME
+  updatePolicy:
+    # Choose one of:
+    # - "Off": Recommendations only (safest, use for initial evaluation)
+    # - "Initial": Apply only at pod creation (safe for most production)
+    # - "Auto": Full automatic updates (best cost savings, but restarts pods)
+    updateMode: "Off"
+  resourcePolicy:
+    containerPolicies:
+      - containerName: "*"
+        # Set conservative minimums to prevent under-provisioning
+        minAllowed:
+          cpu: 50m
+          memory: 64Mi
+        # Set maximums based on your node sizes
+        # For Standard_D4s_v5 (4 vCPU, 16 GB): cpu: 3500m, memory: 14Gi
+        # For Standard_E4s_v5 (4 vCPU, 32 GB): cpu: 3500m, memory: 30Gi
+        maxAllowed:
+          cpu: 3500m
+          memory: 14Gi
+        controlledResources: ["cpu", "memory"]
+        # RequestsOnly is safer - keeps your limits/requests ratio
+        controlledValues: RequestsOnly

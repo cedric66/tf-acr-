@@ -110,40 +110,66 @@ variable "spot_pool_configs" {
     priority_weight      = optional(number, 10)  # For expander priority
   }))
   default = [
+    # General purpose D-series pool (Zone 1)
     {
       name      = "spotgeneral1"
-      vm_size   = "Standard_D4s_v5"
+      vm_size   = "Standard_D4s_v5"   # 4 vCPU, 16 GB RAM - general purpose
       min_count = 0
       max_count = 20
       zones     = ["1"]
     },
+    # Memory-optimized E-series pool (Zone 2)
+    # E-series has LOWER spot competition than D-series per LinkedIn case study
     {
-      name      = "spotgeneral2"
-      vm_size   = "Standard_D8s_v5"
+      name      = "spotmemory1"
+      vm_size   = "Standard_E4s_v5"   # 4 vCPU, 32 GB RAM - memory optimized, lower eviction risk
       min_count = 0
       max_count = 15
       zones     = ["2"]
+      priority_weight = 5             # Higher priority (lower number) - prefer memory VMs
     },
+    # Larger general purpose pool (Zone 2)
+    {
+      name      = "spotgeneral2"
+      vm_size   = "Standard_D8s_v5"   # 8 vCPU, 32 GB RAM - larger general purpose
+      min_count = 0
+      max_count = 15
+      zones     = ["2"]
+      priority_weight = 10
+    },
+    # Compute-optimized F-series pool (Zone 3)
     {
       name      = "spotcompute"
-      vm_size   = "Standard_F8s_v2"
+      vm_size   = "Standard_F8s_v2"   # 8 vCPU, 16 GB RAM - compute optimized
       min_count = 0
       max_count = 10
       zones     = ["3"]
+      priority_weight = 10
+    },
+    # Additional memory-optimized pool (Zone 3) for diversity
+    {
+      name      = "spotmemory2"
+      vm_size   = "Standard_E8s_v5"   # 8 vCPU, 64 GB RAM - large memory workloads
+      min_count = 0
+      max_count = 10
+      zones     = ["3"]
+      priority_weight = 5             # Prefer memory VMs
     }
   ]
 }
 
 ###############################################################################
 # Cluster Autoscaler Configuration
+# Optimized for bursty/spot workloads per Microsoft recommendation:
+# https://learn.microsoft.com/en-us/azure/aks/cluster-autoscaler
 ###############################################################################
 
 variable "autoscaler_profile" {
-  description = "Cluster autoscaler profile settings optimized for spot instances"
+  description = "Cluster autoscaler profile settings optimized for spot instances and bursty workloads"
   type = object({
     balance_similar_node_groups      = optional(bool, true)
     expander                         = optional(string, "priority")
-    max_graceful_termination_sec     = optional(number, 30)
+    max_graceful_termination_sec     = optional(number, 60)           # Increased from 30s for graceful shutdown
     max_node_provisioning_time       = optional(string, "15m")
     max_unready_nodes                = optional(number, 3)
     max_unready_percentage           = optional(number, 45)
@@ -151,12 +177,16 @@ variable "autoscaler_profile" {
     scale_down_delay_after_add       = optional(string, "10m")
     scale_down_delay_after_delete    = optional(string, "10s")
     scale_down_delay_after_failure   = optional(string, "3m")
-    scale_down_unneeded              = optional(string, "10m")
-    scale_down_unready               = optional(string, "20m")
+    scale_down_unneeded              = optional(string, "5m")          # Faster scale-down per bursty profile
+    scale_down_unready               = optional(string, "5m")          # Faster unready scale-down
     scale_down_utilization_threshold = optional(number, 0.5)
-    scan_interval                    = optional(string, "10s")
+    scan_interval                    = optional(string, "20s")         # MS recommended for bursty workloads (was 10s)
     skip_nodes_with_local_storage    = optional(bool, false)
     skip_nodes_with_system_pods      = optional(bool, true)
+    # New settings GA in API 2024-05-01
+    ignore_daemonsets_utilization        = optional(bool, false)
+    daemonset_eviction_for_empty_nodes   = optional(bool, false)
+    daemonset_eviction_for_occupied_nodes = optional(bool, true)
   })
   default = {}
 }

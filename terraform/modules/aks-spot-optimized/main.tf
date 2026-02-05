@@ -60,6 +60,13 @@ resource "azurerm_kubernetes_cluster" "main" {
   dns_prefix          = var.cluster_name
   kubernetes_version  = var.kubernetes_version
 
+  # AKS node auto-repair: automatically detects NotReady nodes and attempts
+  # recovery via reimage or replace. Critical for spot pools where evicted
+  # VMSS instances can get stuck in Unknown/Failed provisioning state.
+  # This is enabled by default in AKS but we set the OS upgrade channel
+  # explicitly to ensure the node image is kept current.
+  node_os_upgrade_channel = var.node_os_upgrade_channel
+
   tags = var.tags
 
   # System Node Pool (Default Pool)

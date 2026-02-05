@@ -148,7 +148,9 @@ Configured in `variables.tf` (autoscaler profile):
 | `expander` | `priority` | Selects pools by priority weight |
 | `scan_interval` | `20s` | How often autoscaler checks for pending pods |
 | `max_graceful_termination_sec` | `60` | Max time for pod drains during scale-down |
+| `max_node_provisioning_time` | `10m` | Abandon stuck VMSS provisioning, retry elsewhere |
 | `scale_down_delay_after_delete` | `10s` | Quick reaction after node deletion/eviction |
+| `scale_down_unready` | `3m` | Remove ghost NotReady nodes from failed spot evictions |
 | `scale_down_unneeded` | `5m` | Time before removing underutilized nodes |
 | `skip_nodes_with_system_pods` | `true` | Protects system pool from scale-down |
 
@@ -170,6 +172,18 @@ After spot eviction, pods land on standard on-demand nodes. When spot capacity r
 
 **Solution:** Deploy the Kubernetes Descheduler with `RemovePodsViolatingNodeAffinity` strategy. It runs every 5-10 minutes, identifies pods on standard nodes that prefer spot, evicts them, and lets the scheduler place them back on cheaper spot capacity. See `docs/SPOT_EVICITION_SCENARIOS.md` for full details and test manifests.
 
+### VMSS Ghost Instance Problem
+
+After spot eviction with `Delete` policy, the VMSS instance sometimes gets stuck in `Unknown`/`Failed` provisioning state instead of being removed. The Cluster Autoscaler counts this ghost as existing capacity and **does not provision a replacement**. Each node pool VMSS is pinned to specific zones, so the autoscaler cannot cross to a different zone within the same pool.
+
+**Automated mitigations:**
+- `scale_down_unready = "3m"` - autoscaler removes ghost NotReady nodes after 3 minutes
+- `max_node_provisioning_time = "10m"` - autoscaler abandons stuck provisioning and retries
+- AKS node auto-repair (always on) detects NotReady nodes and reimages/replaces them
+- Priority Expander routes pending pods to other pools/zones while the ghost blocks
+
+**Manual remediation (if automation fails):** Delete the stuck VMSS instance via `az vmss delete-instances`, then `kubectl delete node <ghost-node>`. See `docs/SRE_OPERATIONAL_RUNBOOK.md` Runbook 5.
+
 ### Eviction Scenarios Summary
 
 | Scenario | What Happens | Outcome |
@@ -177,6 +191,7 @@ After spot eviction, pods land on standard on-demand nodes. When spot capacity r
 | Single spot pool evicted | Pods reschedule to other spot pools | Handled by Cluster Autoscaler |
 | All spot pools evicted | Pods fall back to standard on-demand pool | Autoscaler scales up standard pool |
 | Spot capacity recovers | Pods stay on standard (sticky fallback) | Descheduler moves pods back to spot |
+| VMSS ghost after eviction | Node stuck NotReady, pool capacity blocked | Auto-repair + `scale_down_unready` clean up in 3-5m |
 | Regional capacity event | PDBs limit disruption, standard pools absorb | Multi-zone spread reduces blast radius |
 
 ### Monitoring Evictions
@@ -276,6 +291,7 @@ After completing changes that affect scope, architecture, metrics, or roadmap:
 7. **Pod Disruption Budgets** should maintain >=50% availability for spot workloads
 8. **Karpenter/NAP is archived** - prototype lives in `terraform/prototypes/_archived/aks-nap/` for reference only; do not develop against it
 9. **Sticky fallback** - pods do not auto-return to spot nodes after eviction recovery; requires Descheduler (see `docs/SPOT_EVICITION_SCENARIOS.md`)
+10. **VMSS ghost instances** - after spot eviction, VMSS instances can get stuck in Unknown/Failed state, blocking pool capacity; `scale_down_unready=3m` and AKS node auto-repair handle this automatically (see `docs/SRE_OPERATIONAL_RUNBOOK.md` Runbook 5)
 
 ## Security Considerations
 

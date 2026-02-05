@@ -170,7 +170,7 @@ variable "autoscaler_profile" {
     balance_similar_node_groups      = optional(bool, true)
     expander                         = optional(string, "priority")
     max_graceful_termination_sec     = optional(number, 60)           # Increased from 30s for graceful shutdown
-    max_node_provisioning_time       = optional(string, "15m")
+    max_node_provisioning_time       = optional(string, "10m")        # Reduced: fail fast on stuck VMSS instances so autoscaler retries elsewhere
     max_unready_nodes                = optional(number, 3)
     max_unready_percentage           = optional(number, 45)
     new_pod_scale_up_delay           = optional(string, "0s")
@@ -178,7 +178,7 @@ variable "autoscaler_profile" {
     scale_down_delay_after_delete    = optional(string, "10s")
     scale_down_delay_after_failure   = optional(string, "3m")
     scale_down_unneeded              = optional(string, "5m")          # Faster scale-down per bursty profile
-    scale_down_unready               = optional(string, "5m")          # Faster unready scale-down
+    scale_down_unready               = optional(string, "3m")          # Aggressive: remove ghost NotReady nodes from evicted spot VMs quickly
     scale_down_utilization_threshold = optional(number, 0.5)
     scan_interval                    = optional(string, "20s")         # MS recommended for bursty workloads (was 10s)
     skip_nodes_with_local_storage    = optional(bool, false)
@@ -234,6 +234,20 @@ variable "admin_group_object_ids" {
   description = "List of Azure AD group object IDs for cluster admin access"
   type        = list(string)
   default     = []
+}
+
+###############################################################################
+# Node OS & Auto-Repair
+###############################################################################
+
+variable "node_os_upgrade_channel" {
+  description = "Node OS upgrade channel. Also ensures AKS node auto-repair is active (detects NotReady nodes from stuck VMSS instances after spot eviction and reimages/replaces them)."
+  type        = string
+  default     = "NodeImage"
+  validation {
+    condition     = contains(["None", "Unmanaged", "SecurityPatch", "NodeImage"], var.node_os_upgrade_channel)
+    error_message = "node_os_upgrade_channel must be one of: None, Unmanaged, SecurityPatch, NodeImage."
+  }
 }
 
 ###############################################################################

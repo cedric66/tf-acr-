@@ -287,11 +287,94 @@ kubectl get deployment <deployment> -o yaml | grep -A5 tolerations
 
 ---
 
-### Runbook 5: Node Not Ready After Eviction Recovery
+### Runbook 5: VMSS Ghost Instance After Spot Eviction (Node Stuck NotReady/Unknown)
+
+**Alert:** `Node remains NotReady > 5 minutes after eviction` or `VMSS instance in Unknown state`
+
+**Cause:** After spot eviction with `Delete` policy, the VMSS instance fails to clean up properly. The Azure platform marks the instance as Failed/Unknown instead of removing it. The Cluster Autoscaler counts the ghost instance as existing capacity and does not provision a replacement.
+
+**Why no replacement appears in another zone:** Each node pool is backed by one VMSS pinned to specific zones. The autoscaler only provisions within that pool's configured zones. Cross-zone replacement only happens when pending pods trigger the Priority Expander to select a different pool.
+
+**Impact:** Pool capacity is reduced. The ghost node blocks the autoscaler from provisioning a replacement. If pods were running on the evicted node, they become Pending but the autoscaler may not scale up the same pool because it sees the ghost as existing capacity.
+
+**Response Procedure:**
+
+```bash
+# Step 1: Identify the ghost node
+kubectl get nodes -l kubernetes.azure.com/scalesetpriority=spot -o wide
+# Look for nodes in "NotReady" or "Unknown" status
+
+# Step 2: Check the VMSS instance state in Azure
+# Get the node resource group (MC_* group)
+NODE_RG=$(az aks show -g <resource-group> -n <cluster-name> \
+  --query nodeResourceGroup -o tsv)
+
+# List VMSS instances and their provisioning states
+az vmss list -g $NODE_RG --query "[].name" -o tsv | while read VMSS; do
+  echo "=== $VMSS ==="
+  az vmss list-instances -g $NODE_RG -n $VMSS \
+    --query "[].{name:name, state:provisioningState, zone:zones[0]}" -o table
+done
+# Look for instances with provisioningState: Failed, Deleting, or Creating
+
+# Step 3: Check autoscaler logs for why it's not replacing
+kubectl logs -n kube-system -l app=cluster-autoscaler --tail=100 | \
+  grep -E "NotReady|unready|failed to delete|ScaleUp"
+# Look for: "node is not ready", "failed to delete node", or no ScaleUp entries
+
+# Step 4: Delete the ghost VMSS instance to unblock the autoscaler
+# Identify the stuck instance ID from Step 2
+az vmss delete-instances -g $NODE_RG -n <vmss-name> --instance-ids <instance-id>
+
+# Step 5: Remove the ghost node from Kubernetes
+kubectl delete node <ghost-node-name>
+# The autoscaler will now see reduced capacity and provision a replacement
+
+# Step 6: Verify recovery
+kubectl get nodes -l kubernetes.azure.com/scalesetpriority=spot -w
+# A new node should appear within 2-5 minutes
+
+# Step 7: If the same pool keeps failing (no spot capacity in that zone)
+# Check autoscaler logs for capacity errors
+kubectl logs -n kube-system -l app=cluster-autoscaler --tail=50 | \
+  grep -E "CloudProvider|FailedScaleUp|QuotaExceeded"
+# If no capacity: pods will schedule on other spot pools or standard pool
+# via Priority Expander fallback. No manual action needed.
+```
+
+**Automated Mitigations in Place:**
+
+| Mechanism | Setting | What It Does |
+|-----------|---------|-------------|
+| AKS Node Auto-Repair | Always on | Detects NotReady nodes, attempts reimage/replace |
+| `scale_down_unready` | `3m` | Autoscaler removes unready nodes after 3 minutes |
+| `max_node_provisioning_time` | `10m` | Autoscaler abandons stuck provisioning after 10 minutes |
+| `max_unready_nodes` | `3` | Autoscaler continues scaling even with up to 3 unready nodes |
+| Priority Expander | Tiered fallback | Pending pods route to other spot pools or standard pool |
+
+**Expected Timeline With Current Settings:**
+
+```
+T+0s:    Spot VM evicted, VMSS instance stuck in Unknown state
+T+0s:    Pods from evicted node become Pending
+T+20s:   Autoscaler scan detects pending pods
+T+20s:   Priority Expander tries same pool → may fail (ghost occupies capacity)
+T+40s:   Next scan → Priority Expander tries other spot pools / standard pool
+T+120s:  Pods scheduled on different pool (cross-pool fallback works)
+T+3m:    scale_down_unready kicks in → autoscaler attempts to delete ghost node
+T+5m:    AKS node auto-repair detects NotReady → reimages or replaces instance
+T+10m:   max_node_provisioning_time expires → autoscaler marks node as failed
+```
+
+**Escalation:** If ghost node persists >15 minutes after manual deletion attempt, open an Azure support ticket -- this indicates a platform-level VMSS issue.
+
+---
+
+### Runbook 5b: Node Not Ready After Eviction (Non-Ghost Scenarios)
 
 **Alert:** `Node remains NotReady > 15 minutes after eviction`
 
-**Cause:** Azure VM provisioning issue, kubelet crash, network issue
+**Cause:** Azure VM provisioning issue, kubelet crash, network issue (not a ghost instance)
 
 **Impact:** Reduced capacity on spot pool
 
@@ -302,7 +385,9 @@ kubectl get deployment <deployment> -o yaml | grep -A5 tolerations
 kubectl describe node <node-name> | grep -A20 Conditions
 
 # Step 2: Check if node is in Azure
-az vm list -g <node-resource-group> --query "[?name=='<node-name>']"
+NODE_RG=$(az aks show -g <resource-group> -n <cluster-name> \
+  --query nodeResourceGroup -o tsv)
+az vm list -g $NODE_RG --query "[?name=='<node-name>']"
 
 # If node doesn't exist in Azure:
 ## Azure failed to provision - this is normal for spot
@@ -311,25 +396,16 @@ az vm list -g <node-resource-group> --query "[?name=='<node-name>']"
 kubectl logs -n kube-system -l app=cluster-autoscaler --tail=20
 
 # If node exists in Azure but NotReady:
-## SSH to node (if possible) and check kubelet
-ssh azureuser@<node-ip>
-sudo systemctl status kubelet
-sudo journalctl -u kubelet --no-pager | tail -50
-
-# Step 3: Common fixes
-## Fix 1: Kubelet crash - restart
-ssh azureuser@<node-ip> "sudo systemctl restart kubelet"
-
-## Fix 2: Network issue - check CNI
+## Check kubelet and network
 kubectl get pods -n kube-system -o wide | grep <node-name>
 
-## Fix 3: Node unresponsive - drain and delete
-kubectl drain <node-name> --ignore-daemonsets --delete-emptydir-data
+# Step 3: Node unresponsive - drain and delete
+kubectl drain <node-name> --ignore-daemonsets --delete-emptydir-data --force
 kubectl delete node <node-name>
 # Autoscaler will replace
 
 # Step 4: Monitor recovery
-kubectl get node <node-name> -w
+kubectl get nodes -w
 ```
 
 ---

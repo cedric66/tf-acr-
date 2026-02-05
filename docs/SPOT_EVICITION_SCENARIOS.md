@@ -58,7 +58,7 @@ strategies:
 ```
 
 ### 3. How it Works during Recovery (Scenario 4)
-1. **Spot Pool Returns**: Cluster Autoscaler or Karpenter sees Spot nodes are available.
+1. **Spot Pool Returns**: Cluster Autoscaler sees Spot nodes are available.
 2. **Descheduler Runs**: It identifies pods on `Standard` nodes that have a `preferred` affinity for `Spot` nodes.
 3. **Eviction**: Descheduler evicts those pods from the Standard nodes.
 4. **Rescheduling**: The Scheduler picks up the evicted pods and, seeing available Spot nodes, places them back on the cheaper capacity.

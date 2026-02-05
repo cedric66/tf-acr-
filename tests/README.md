@@ -27,8 +27,6 @@ This directory contains automated tests for the Terraform modules using [Terrate
    az account set --subscription <subscription-id>
    ```
 
-> **Note:** The Karpenter NAP prototype tests will log validation errors because `node_provisioning_mode` is a preview feature not yet in the public azurerm provider. These tests pass by design.
-
 ## Running Tests
 
 ### Unit Tests (No Azure Required)
@@ -60,9 +58,6 @@ go test -v -timeout 30m ./...
 ```bash
 # Run only module validation tests
 go test -v -run TestAksSpotModuleValidation
-
-# Run only Karpenter tests
-go test -v -run TestKarpenter
 ```
 
 ## Test Structure
@@ -73,7 +68,6 @@ tests/
 ├── doc.go                        # Package documentation
 ├── aks_spot_module_test.go       # Unit tests for aks-spot-optimized
 ├── aks_spot_integration_test.go  # Integration tests (Azure deployment)
-├── karpenter_nap_test.go         # Tests for Karpenter NAP prototype
 └── README.md                     # This file
 ```
 

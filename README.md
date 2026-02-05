@@ -74,7 +74,7 @@ Reference the [Consolidated Project Brief](CONSOLIDATED_PROJECT_BRIEF.md) for a 
 ### 🏗️ Technical Architecture
 - [AKS Spot Architecture](docs/AKS_SPOT_NODE_ARCHITECTURE.md) - Core technical design
 - [Scaled Spot Orchestration](docs/SCALED_SPOT_ORCHESTRATION.md) - Scaling & orchestration logic
-- [Networking & Karpenter Guide](docs/AKS_NETWORK_KARPENTER_GUIDE.md) - AKS networking & provisioner setup
+- [AKS Network Configuration Guide](docs/AKS_NETWORK_KARPENTER_GUIDE.md) - AKS networking reference (Karpenter sections archived)
 - [Terragrunt Analysis](docs/TERRAGRUNT_ANALYSIS.md) - Infrastructure management patterns
 
 ### 🛠️ Operations & SRE

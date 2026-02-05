@@ -7,7 +7,7 @@
 
 ## Overview
 
-This document describes the local testing performed using **Kind (Kubernetes in Docker)** to simulate Spot instance behaviors and failure scenarios. Since Karpenter and Azure Spot APIs cannot run locally, we simulate the *behavior* and *effects* of Spot instances using node taints, cordons, and drains.
+This document describes the local testing performed using **Kind (Kubernetes in Docker)** to simulate Spot instance behaviors and failure scenarios. Since Azure Spot APIs cannot run locally, we simulate the *behavior* and *effects* of Spot instances using node taints, cordons, and drains.
 
 ---
 
@@ -201,7 +201,7 @@ Initial distribution: 2 pods on spot-worker2, 3 pods on spot-worker3, 1 pod on o
 
 | Feature | Reason | Alternative |
 |---------|--------|-------------|
-| **Karpenter Auto-Provisioning** | Requires Azure/AWS API | Use real cluster or mock APIs |
+| **Cluster Autoscaler Provisioning** | Requires Azure VMSS API | Use real AKS cluster |
 | **Spot Pricing/Max Price** | Azure billing feature | N/A |
 | **Real 2-Minute Warning** | Azure Metadata Service | Use Azure Metadata proxy or generic metadata mock |
 | **Multi-Cluster Contention** | Requires multiple real clusters | Test one cluster, extrapolate |
@@ -218,8 +218,6 @@ Initial distribution: 2 pods on spot-worker2, 3 pods on spot-worker3, 1 pod on o
 
 ### Run Full Simulation
 ```bash
-cd /home/sp/Documents/code/tf-acr-
-
 # Run the automated simulation script
 ./scripts/simulate_spot_contention.sh all
 ```

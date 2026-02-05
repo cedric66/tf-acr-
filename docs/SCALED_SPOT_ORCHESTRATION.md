@@ -6,23 +6,6 @@
 
 ---
 
-## Karpenter/NAP Status (as of January 2026)
-
-| Aspect | Status |
-|--------|--------|
-| **Availability** | ✅ **Generally Available** (since July 2025) |
-| **Terraform Support** | azurerm 4.x+ (check your provider version) |
-| **Required Networking** | Azure CNI Overlay + Cilium |
-| **Unsupported** | Kubenet, Calico, Windows nodes, IPv6 |
-
-> [!TIP]
-> NAP is now GA! Enable it directly:
-> ```bash
-> az aks update -g <rg> -n <cluster> --node-provisioning-mode Auto
-> ```
-
----
-
 ## Executive Summary
 
 This document addresses the challenge of running **10-15 AKS clusters** in a single Azure region while efficiently utilizing **Spot VMs**. At this scale, clusters compete for the same Spot capacity, creating "thundering herd" scenarios during peak demand or regional capacity constraints.
@@ -30,7 +13,7 @@ This document addresses the challenge of running **10-15 AKS clusters** in a sin
 The solution combines:
 1. **Instance Diversity** - Spread workloads across multiple VM SKUs
 2. **Regional Distribution** - Utilize multiple Availability Zones and regions
-3. **Karpenter (NAP)** - Dynamic provisioning for automatic fallback
+3. **Cluster Autoscaler + Priority Expander** - Cost-optimized pool selection with automatic fallback
 4. **Coordinated Scaling** - Staggered scaling to avoid capacity spikes
 
 ---
@@ -40,7 +23,7 @@ The solution combines:
 1. [The Contention Problem](#the-contention-problem)
 2. [Scenario Analysis](#scenario-analysis)
 3. [Solution Architecture](#solution-architecture)
-4. [Karpenter Implementation](#karpenter-implementation)
+4. [Cluster Autoscaler + Priority Expander](#cluster-autoscaler--priority-expander)
 5. [Fleet Management Strategies](#fleet-management-strategies)
 6. [Testing & Simulation](#testing--simulation)
 
@@ -100,9 +83,10 @@ The solution combines:
 - Azure capacity: ~50 nodes available
 - Result: 100 nodes stuck in Pending
 
-**With Karpenter + Diversity:**
-- Karpenter selects from: `D4s_v5`, `D8s_v5`, `E4s_v5`, `E8s_v5`
+**With Multi-Pool Diversity + Priority Expander:**
+- 5 spot pools across: `D4s_v5`, `D8s_v5`, `E4s_v5`, `E8s_v5`, `F8s_v2`
 - Requests spread across Zones 1, 2, 3
+- Priority Expander selects lowest-eviction-risk pools first
 - Result: 95%+ success rate
 
 ### Scenario 2: Regional Eviction Event (Rare but Critical)
@@ -117,7 +101,7 @@ The solution combines:
 **With Mitigation:**
 - Pod Disruption Budgets limit eviction rate
 - Standard pools pre-scaled with buffer capacity
-- Karpenter immediately provisions alternative SKUs
+- Cluster Autoscaler provisions standard on-demand nodes as fallback
 - Recovery time: 2-5 minutes
 
 ### Scenario 3: Quota Exhaustion
@@ -125,7 +109,7 @@ The solution combines:
 **Event:** Subscription vCPU quota reached.
 
 **Symptoms:**
-- Cluster Autoscaler/Karpenter log: `QuotaExceeded`
+- Cluster Autoscaler log: `QuotaExceeded`
 - All clusters blocked from scaling
 
 **Mitigation:**
@@ -150,10 +134,10 @@ The solution combines:
 │                     LAYER 2: ZONE DISTRIBUTION                      │
 │      Zone 1 (33%)      Zone 2 (33%)      Zone 3 (34%)            │
 ├────────────────────────────────────────────────────────────────────┤
-│                     LAYER 3: KARPENTER (NAP)                        │
-│  • Dynamic SKU selection based on availability                      │
-│  • Automatic Spot → On-Demand fallback                             │
-│  • Consolidation for cost optimization                              │
+│                     LAYER 3: CLUSTER AUTOSCALER + PRIORITY EXPANDER  │
+│  • Priority-based pool selection (memory spot → compute spot → std) │
+│  • Automatic Spot → On-Demand fallback                              │
+│  • Tuned for bursty/spot workloads (20s scan, 60s graceful term)    │
 ├────────────────────────────────────────────────────────────────────┤
 │                     LAYER 4: FLEET COORDINATION                     │
 │  • Staggered scaling windows per cluster                            │
@@ -164,65 +148,57 @@ The solution combines:
 
 ---
 
-## Karpenter Implementation
+## Cluster Autoscaler + Priority Expander
 
-### Why Karpenter (AKS Node Autoprovisioning)?
+### Why Cluster Autoscaler with Priority Expander?
 
-| Feature | Native Autoscaler | Karpenter (NAP) |
-|---------|-------------------|-----------------|
-| SKU Selection | Fixed per pool | Dynamic from list |
-| Spot Fallback | Manual pool switching | Automatic |
-| Provisioning Speed | ~2-3 minutes | ~1-2 minutes |
-| Bin Packing | Basic | Optimized |
-| Consolidation | Manual | Automatic |
+The Cluster Autoscaler with Priority Expander is the production approach for this project. It provides deterministic, well-tested pool selection with automatic spot-to-on-demand fallback through pre-defined node pools.
 
-### Terraform Deployment
+| Feature | Configuration |
+|---------|--------------|
+| Pool Selection | Priority Expander with tiered weights |
+| SKU Diversity | 5 spot pools across D/E/F VM families |
+| Spot Fallback | Automatic via priority tiers (spot pools → standard pool) |
+| Zone Distribution | Pools spread across Zones 1, 2, 3 |
+| Scan Interval | 20s (tuned for bursty workloads) |
+| Graceful Termination | 60s max |
 
-See [terraform/prototypes/aks-nap/main.tf](../terraform/prototypes/aks-nap/main.tf) for complete code.
+### Priority Expander Configuration
 
-```hcl
-resource "azurerm_kubernetes_cluster" "nap_enabled" {
-  # ...
-  node_provisioning_mode = "Auto"  # Enables Karpenter
-  
-  network_profile {
-    network_plugin      = "azure"
-    network_plugin_mode = "overlay"
-    network_policy      = "cilium"
-    network_data_plane  = "cilium"
-  }
-}
-```
-
-### Karpenter NodePool Configuration
+The Priority Expander controls which node pool the autoscaler selects when scaling up. Lower number = higher priority (preferred first):
 
 ```yaml
-apiVersion: karpenter.sh/v1beta1
-kind: NodePool
-metadata:
-  name: spot-flexible
-spec:
-  template:
-    spec:
-      requirements:
-        - key: karpenter.sh/capacity-type
-          operator: In
-          values: ["spot", "on-demand"]  # Fallback enabled
-        - key: kubernetes.azure.com/sku-family
-          operator: In
-          values: ["D", "E", "F"]  # Multiple families
-        - key: kubernetes.azure.com/sku-cpu
-          operator: In
-          values: ["2", "4", "8", "16"]
-      nodeClassRef:
-        name: default
-  limits:
-    cpu: 1000
-  disruption:
-    consolidationPolicy: WhenUnderutilized
-    budgets:
-      - nodes: "10%"  # Max 10% nodes disrupted at once
+# Priority 5: Memory-optimized spot pools (E-series) - lowest eviction risk
+5:
+  - .*spotmemory.*
+
+# Priority 10: General/Compute spot pools (D/F-series)
+10:
+  - .*spotgeneral.*
+  - .*spotcompute.*
+
+# Priority 20: Standard on-demand pools (fallback)
+20:
+  - .*stdworkload.*
+
+# Priority 30: System pool (never used for user workloads)
+30:
+  - .*system.*
 ```
+
+### Node Pool Configuration
+
+See [terraform/modules/aks-spot-optimized/](../terraform/modules/aks-spot-optimized/) for complete code.
+
+| Pool | VM Size | Type | Zones | Priority Weight |
+|------|---------|------|-------|----------------|
+| `spotmemory1` | E4s_v5 | Spot | 2 | 5 (preferred) |
+| `spotmemory2` | E8s_v5 | Spot | 3 | 5 (preferred) |
+| `spotgeneral1` | D4s_v5 | Spot | 1 | 10 |
+| `spotgeneral2` | D8s_v5 | Spot | 2 | 10 |
+| `spotcompute` | F8s_v2 | Spot | 3 | 10 |
+| `stdworkload` | D4s_v5 | On-Demand | 1-2 | 20 (fallback) |
+| `system` | D4s_v5 | On-Demand | 1-3 | 30 (never for user workloads) |
 
 ---
 
@@ -262,7 +238,7 @@ To avoid all clusters competing for the same SKU:
 
 ### Local Simulation with Kind
 
-Since Karpenter requires Azure APIs, we simulate the **behavior** locally:
+Since Azure Spot APIs cannot run locally, we simulate the **behavior** locally:
 
 1. **Stockout Simulation**: Taint nodes as "unavailable" to force fallback
 2. **Eviction Simulation**: Drain nodes to test pod rescheduling
@@ -282,9 +258,9 @@ See [scripts/simulate_spot_contention.sh](../scripts/simulate_spot_contention.sh
 
 | Criteria | Recommendation |
 |----------|----------------|
-| < 5 clusters | Native Autoscaler is sufficient |
-| 5-10 clusters | Consider Karpenter for flexibility |
-| 10-15 clusters | **Karpenter required** + Fleet coordination |
+| < 5 clusters | Cluster Autoscaler + Priority Expander is sufficient |
+| 5-10 clusters | Add SKU affinity per cluster group + zone distribution |
+| 10-15 clusters | SKU diversity + fleet coordination + subscription distribution |
 | > 15 clusters | Multi-region + Multi-subscription mandatory |
 
 ---
@@ -293,7 +269,7 @@ See [scripts/simulate_spot_contention.sh](../scripts/simulate_spot_contention.sh
 
 - [AKS Spot Node Architecture](AKS_SPOT_NODE_ARCHITECTURE.md)
 - [Orchestration Plan](spot-research/orchestration-plan.md)
-- [Karpenter Prototype](../terraform/prototypes/aks-nap/)
+- [Karpenter Prototype (Archived)](../terraform/prototypes/_archived/aks-nap/)
 
 ---
 

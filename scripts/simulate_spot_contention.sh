@@ -203,7 +203,7 @@ run_simulation() {
   
   if [[ "$PENDING" -gt 0 ]]; then
     log_warn "Some pods are PENDING (simulating no fallback capacity)"
-    log_info "In real Karpenter, these would trigger on-demand node provisioning"
+    log_info "In production, the Cluster Autoscaler would trigger on-demand node provisioning"
   else
     log_ok "All pods rescheduled successfully!"
   fi
@@ -223,7 +223,7 @@ run_simulation() {
   log_info "  1. Pods initially spread across spot nodes (preferred)"
   log_info "  2. When spot nodes drained, pods moved to on-demand"
   log_info "  3. If on-demand capacity insufficient, pods would be Pending"
-  log_info "  4. Karpenter would automatically provision new nodes"
+  log_info "  4. Cluster Autoscaler would automatically provision new on-demand nodes"
 }
 
 # ─────────────────────────────────────────────────────────────────────────────

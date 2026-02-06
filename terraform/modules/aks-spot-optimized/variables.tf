@@ -248,8 +248,18 @@ variable "azure_ad_enabled" {
   default     = true
 }
 
+variable "admin_principals" {
+  description = "List of Azure AD principals (users/groups/service principals) for cluster admin access"
+  type = list(object({
+    object_id = string
+    type      = string # "User", "Group", or "ServicePrincipal"
+  }))
+  default = []
+}
+
+# Deprecated: Use admin_principals instead
 variable "admin_group_object_ids" {
-  description = "List of Azure AD group object IDs for cluster admin access"
+  description = "DEPRECATED: Use admin_principals. List of Azure AD group object IDs for cluster admin access"
   type        = list(string)
   default     = []
 }

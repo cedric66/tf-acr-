@@ -93,6 +93,22 @@ module "diagnostics" {
 
 Reference the [Consolidated Project Brief](CONSOLIDATED_PROJECT_BRIEF.md) for a high-level summary.
 
+## 📋 Prerequisites
+
+### Infrastructure Deployment
+- [Terraform](https://www.terraform.io/downloads) >= 1.5.0
+- [Azure CLI](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli) (authenticated)
+
+### Workload Deployment
+- [Helm](https://helm.sh/docs/intro/install/) >= 3.0
+- [kubectl](https://kubernetes.io/docs/tasks/tools/) (configured with cluster context)
+- AKS Cluster deployed and accessible
+
+**Install Helm (if missing):**
+```bash
+curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+```
+
 ## 🎯 Workload Deployment (Isolated)
 
 Workload manifests are **isolated from cluster infrastructure** in the `workloads/` directory.
@@ -101,6 +117,13 @@ Workload manifests are **isolated from cluster infrastructure** in the `workload
 |----------|---------|
 | [Robot Shop](workloads/robot-shop/) | E-commerce microservices for spot testing |
 | [Descheduler](workloads/descheduler/) | Auto-rebalance after evictions |
+
+**Verify Prerequisites:**
+```bash
+helm version          # Should show v3.x
+kubectl cluster-info  # Should connect to AKS
+kubectl get nodes     # Should list cluster nodes
+```
 
 **Deployment Order**:
 ```bash

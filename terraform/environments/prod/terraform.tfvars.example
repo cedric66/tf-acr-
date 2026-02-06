@@ -143,8 +143,12 @@ spot_pool_configs = [
 # Optional: AAD & RBAC
 ###############################################################################
 
-# Azure AD group object IDs for cluster admin access (optional)
-# admin_group_object_ids = ["00000000-0000-0000-0000-000000000000"]
+# Azure AD user/group/service principal object IDs for cluster admin access
+# These will be assigned "Azure Kubernetes Service RBAC Cluster Admin" role
+# Get Object IDs: az ad user show --id user@example.com --query id -o tsv
+admin_group_object_ids = [
+  # "00000000-0000-0000-0000-000000000000",  # Replace with actual Object IDs
+]
 
 ###############################################################################
 # Optional: Tags

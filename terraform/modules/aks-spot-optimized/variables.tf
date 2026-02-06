@@ -236,6 +236,12 @@ variable "enable_rbac" {
   default     = true
 }
 
+variable "identity_ids" {
+  description = "Specifies a list of User Assigned Managed Identity IDs to be assigned to this AKS Cluster. Required if identity_type is UserAssigned."
+  type        = list(string)
+  default     = []
+}
+
 variable "azure_ad_enabled" {
   description = "Enable Azure AD integration"
   type        = bool

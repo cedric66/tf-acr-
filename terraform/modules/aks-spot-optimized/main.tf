@@ -122,8 +122,10 @@ resource "azurerm_kubernetes_cluster" "main" {
   }
 
   # Identity
+  # Identity
   identity {
-    type = var.identity_type
+    type         = var.identity_type
+    identity_ids = var.identity_type == "UserAssigned" ? var.identity_ids : null
   }
 
   # Network Profile

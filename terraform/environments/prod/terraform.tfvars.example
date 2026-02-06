@@ -147,9 +147,18 @@ spot_pool_configs = [
 # These will be assigned "Azure Kubernetes Service RBAC Cluster Admin" role
 # Get Object IDs: az ad user show --id user@example.com --query id -o tsv
 admin_principals = [
+  # Example: Add multiple users, groups, or service principals
   # {
   #   object_id = "12345678-1234-1234-1234-123456789abc"
-  #   type      = "User"  # or "Group" or "ServicePrincipal"
+  #   type      = "User"
+  # },
+  # {
+  #   object_id = "87654321-4321-4321-4321-cba987654321"
+  #   type      = "User"
+  # },
+  # {
+  #   object_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+  #   type      = "Group"
   # },
 ]
 

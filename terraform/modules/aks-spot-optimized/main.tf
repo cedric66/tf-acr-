@@ -88,6 +88,7 @@ resource "azurerm_kubernetes_cluster" "main" {
   resource_group_name = var.resource_group_name
   dns_prefix          = var.cluster_name
   kubernetes_version  = var.kubernetes_version
+  oidc_issuer_enabled = true
 
   # AKS node auto-repair: automatically detects NotReady nodes and attempts
   # recovery via reimage or replace. Critical for spot pools where evicted

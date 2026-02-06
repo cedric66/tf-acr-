@@ -330,6 +330,9 @@ Derived from `.agent/skills/terraform_skill/SKILL.md`.
   - Good: `spotd4z1`
   - Bad: `spot-d4-z1`
 
+### Upgrade Rules
+- **Spot Pools**: NEVER use `upgrade_settings` (max_surge). AKS spot does not support it.
+
 ### Local Simulation (Kind)
 Test spot tolerance without Azure costs:
 

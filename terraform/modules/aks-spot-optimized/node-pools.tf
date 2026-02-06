@@ -89,11 +89,8 @@ resource "azurerm_kubernetes_cluster_node_pool" "spot" {
     each.value.taints
   )
 
-  # Spot pools: Use reduced maxSurge to minimize IP consumption.
-  # Note: Spot pools cannot use maxUnavailable (not supported by Azure)
-  upgrade_settings {
-    max_surge = "10%"
-  }
+  # Spot pools do not support upgrade_settings (max_surge/max_unavailable)
+  # because they don't drain/surge like standard nodes during upgrade.
 
   tags = merge(var.tags, {
     "node-pool-type"  = "spot"

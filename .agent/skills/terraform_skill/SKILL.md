@@ -78,6 +78,11 @@ project-root/
     *   **Max length**: 12 characters for Linux, 6 characters for Windows.
     *   Example: `spotd4z1` (Valid), `spot-d4-z1` (Invalid).
 
+8.  **Spot Pool Upgrades**:
+    *   **NEVER** define `upgrade_settings` (max_surge/max_unavailable) for spot pools.
+    *   AKS does not support drain/surge for spot nodes during upgrade.
+    *   Spot nodes are simply evicted; setting these values causes Terraform failure.
+
 ---
 
 ## 2. Terraform Workflow with tfvars

@@ -1,15 +1,64 @@
 ---
-name: Terraform Automation
-description: How to dry-run Terraform code and simulate EKS spot instances with Kind.
+name: Terraform Automation & Best Practices
+description: Best practices for Terraform project structure, configuration via tfvars, and testing with Kind.
 ---
 
-# Terraform Automation Skill
+# Terraform Automation & Best Practices
 
-This skill covers how to safely validate Terraform changes and how to simulate EKS spot instance behavior locally using Kind.
+This skill outlines the mandatory project structure and workflows for reliable, scalable Terraform infrastructure.
 
-## 1. Terraform Dry Run
+## 1. Project Organization (Mandatory)
 
-A "dry run" in Terraform is performed using `terraform plan`. This command previews infrastructure changes without applying them.
+All Terraform projects must adhere to a strict modular structure to ensure reusability and environment isolation.
+
+### Directory Structure
+
+```text
+project-root/
+├── modules/                 # Reusable logic (Stateless)
+│   ├── networking/          #   - main.tf (Resources)
+│   ├── aks-cluster/         #   - variables.tf (Inputs)
+│   └── database/            #   - outputs.tf (Outputs)
+│
+└── environments/            # Deployable instances (Stateful)
+    ├── dev/                 # Development environment
+    │   ├── main.tf          #   - Calls ../../modules
+    │   ├── variables.tf     #   - Defines environment inputs
+    │   ├── terraform.tfvars #   - Values (git-ignored if sensitive)
+    │   └── backend.tf       #   - State configuration
+    │
+    └── prod/                # Production environment
+        ├── main.tf
+        ├── variables.tf
+        ├── terraform.tfvars
+        └── backend.tf
+```
+
+### Configuration Rules
+
+1.  **Modules vs. Environments**:
+    *   **Modules** contain logic and resources. They **must not** contain provider configurations or backend settings.
+    *   **Environments** contain state and values. They simple instantiate modules.
+
+2.  **No Hardcoded Values**:
+    *   **NEVER** hardcode values like identifiers, names, or SKU counts in `.tf` files.
+    *   **ALWAYS** define a variable in `variables.tf`.
+    *   **ALWAYS** set the value in `terraform.tfvars` (or `*.auto.tfvars`).
+
+3.  **Variable Definitions**:
+    *   All configurable items (node counts, version strings, machine types) must be variables.
+    *   Use `terraform.tfvars.example` to document required variables for users.
+
+4.  **Tags Strategy**:
+    *   **NEVER** hardcode tags in `main.tf` or `locals`.
+    *   **ALWAYS** define a generic `tags` variable (map) and pass values via `terraform.tfvars`.
+    *   Essential tags (environment, owner, project, cost-center) must be explicitly managed in `tfvars`.
+
+---
+
+## 2. Terraform Workflow with tfvars
+
+When running Terraform, explicit configuration files ensure reproducibility.
 
 ### Steps
 
@@ -18,35 +67,25 @@ A "dry run" in Terraform is performed using `terraform plan`. This command previ
     terraform init
     ```
 
-2.  **Validate Syntax**:
+2.  **Validate**:
     ```bash
     terraform validate
     ```
 
-3.  **Preview Changes**:
+3.  **Plan**:
+    Always target the specific environment variable file.
     ```bash
-    terraform plan
-    ```
-    To save the plan to a file for later review or application:
-    ```bash
-    terraform plan -out=tfplan
+    terraform plan -var-file="terraform.tfvars" -out=tfplan
     ```
 
-4.  **Apply (Optional)**:
-    If the plan looks correct, apply it:
+4.  **Apply**:
     ```bash
     terraform apply tfplan
     ```
 
-### Best Practices
-
--   **CI/CD Integration**: Automate `terraform validate` and `terraform plan` in your CI/CD pipeline.
--   **Static Analysis**: Use tools like `tflint` for linting and `tfsec` for security scanning.
--   **Input Validation**: Define validation rules for input variables in your Terraform code.
-
 ---
 
-## 2. Simulate EKS Spot Instances with Kind
+## 3. Simulate EKS Spot Instances with Kind
 
 You can simulate the ephemeral nature of EKS spot instances locally using a Kind cluster, taints, and tolerations.
 

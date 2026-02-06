@@ -96,8 +96,8 @@ variable "log_analytics_retention_days" {
 # Tags
 ###############################################################################
 
-variable "extra_tags" {
-  description = "Additional tags to apply to all resources"
+variable "tags" {
+  description = "Tags to apply to all resources (must include environment, location, managed_by, project)"
   type        = map(string)
   default     = {}
 }

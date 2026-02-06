@@ -31,15 +31,11 @@ provider "azurerm" {
 
 locals {
   # Derive VNet resource group (defaults to main RG if not specified)
+  # Derive VNet resource group (defaults to main RG if not specified)
   vnet_resource_group = coalesce(var.vnet_resource_group_name, var.resource_group_name)
 
-  # Workspace-required tags
-  tags = merge({
-    environment = var.environment
-    location    = var.location
-    managed_by  = "terraform"
-    project     = "aks-spot-optimization"
-  }, var.extra_tags)
+  host_encryption_enabled = var.host_encryption_enabled
+  tags                    = local.tags
 }
 
 ###############################################################################
@@ -90,8 +86,6 @@ module "aks" {
   kubernetes_version      = var.kubernetes_version
   vnet_subnet_id          = data.azurerm_subnet.aks.id
   os_sku                  = var.os_sku
-  host_encryption_enabled = var.host_encryption_enabled
-  tags                    = local.tags
 
   # System pool - minimal, always-on for cluster components
   system_pool_config = {

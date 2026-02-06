@@ -35,7 +35,7 @@ locals {
   vnet_resource_group = coalesce(var.vnet_resource_group_name, var.resource_group_name)
 
   host_encryption_enabled = var.host_encryption_enabled
-  tags                    = local.tags
+  tags                    = var.tags
 }
 
 ###############################################################################

@@ -51,8 +51,8 @@ project-root/
 
 4.  **Tags Strategy**:
     *   **NEVER** hardcode tags in `main.tf` or `locals`.
-    *   **ALWAYS** define a generic `tags` variable (map) and pass values via `terraform.tfvars`.
-    *   Essential tags (environment, owner, project, cost-center) must be explicitly managed in `tfvars`.
+    *   **ALWAYS** define a generic `tags` variable (map) with an empty default `{}`.
+    *   Tags should be completely optional and controlled strictly via `terraform.tfvars`.
 
 ---
 

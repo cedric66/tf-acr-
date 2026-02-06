@@ -44,12 +44,15 @@ host_encryption_enabled = false
 # Log Analytics retention period (days)
 log_analytics_retention_days = 30
 
-# Tags to apply to all resources
-# Must include required tags: environment, location, managed_by, project
+# Tags to apply to all resources (optional)
 tags = {
   environment = "prod"
   location    = "australiaeast"
   managed_by  = "terraform"
+  project     = "aks-spot-optimization"
+  cost_center = "platform"
+  owner       = "devops-team"
+}  managed_by  = "terraform"
   project     = "aks-spot-optimization"
   cost_center = "platform"
   owner       = "devops-team"

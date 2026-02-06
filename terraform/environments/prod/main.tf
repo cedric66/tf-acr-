@@ -22,7 +22,7 @@ provider "azurerm" {
       prevent_deletion_if_contains_resources = false
     }
   }
-  subscription_id = "00000000-0000-0000-0000-000000000000" # Update with your subscription ID
+  subscription_id = var.subscription_id
 }
 
 ###############################################################################
@@ -30,16 +30,16 @@ provider "azurerm" {
 ###############################################################################
 
 locals {
-  environment = "prod"
-  location    = "australiaeast"
+  # Derive VNet resource group (defaults to main RG if not specified)
+  vnet_resource_group = coalesce(var.vnet_resource_group_name, var.resource_group_name)
 
   # Workspace-required tags
-  tags = {
-    environment = local.environment
-    location    = local.location
+  tags = merge({
+    environment = var.environment
+    location    = var.location
     managed_by  = "terraform"
     project     = "aks-spot-optimization"
-  }
+  }, var.extra_tags)
 }
 
 ###############################################################################
@@ -48,20 +48,20 @@ locals {
 
 # Use existing resource group
 data "azurerm_resource_group" "main" {
-  name = "rg-xxxxxx" # Update with your existing resource group name
+  name = var.resource_group_name
 }
 
 # Use existing virtual network
 data "azurerm_virtual_network" "main" {
-  name                = "vnet-xxxxxx" # Update with your existing VNet name
-  resource_group_name = "rg-xxxxxx"   # Update with VNet's resource group
+  name                = var.vnet_name
+  resource_group_name = local.vnet_resource_group
 }
 
 # Use existing subnet
 data "azurerm_subnet" "aks" {
-  name                 = "snet-xxxxxx" # Update with your existing subnet name
+  name                 = var.subnet_name
   virtual_network_name = data.azurerm_virtual_network.main.name
-  resource_group_name  = "rg-xxxxxx" # Update with VNet's resource group
+  resource_group_name  = local.vnet_resource_group
 }
 
 ###############################################################################
@@ -69,11 +69,11 @@ data "azurerm_subnet" "aks" {
 ###############################################################################
 
 resource "azurerm_log_analytics_workspace" "main" {
-  name                = "log-aks-${local.environment}"
+  name                = "log-aks-${var.environment}"
   location            = data.azurerm_resource_group.main.location
   resource_group_name = data.azurerm_resource_group.main.name
   sku                 = "PerGB2018"
-  retention_in_days   = 30
+  retention_in_days   = var.log_analytics_retention_days
   tags                = local.tags
 }
 
@@ -84,12 +84,14 @@ resource "azurerm_log_analytics_workspace" "main" {
 module "aks" {
   source = "../../modules/aks-spot-optimized"
 
-  cluster_name        = "aks-spot-${local.environment}"
-  resource_group_name = data.azurerm_resource_group.main.name
-  location            = data.azurerm_resource_group.main.location
-  kubernetes_version  = "1.34"
-  vnet_subnet_id      = data.azurerm_subnet.aks.id
-  tags                = local.tags
+  cluster_name            = "${var.cluster_name_prefix}-${var.environment}"
+  resource_group_name     = data.azurerm_resource_group.main.name
+  location                = data.azurerm_resource_group.main.location
+  kubernetes_version      = var.kubernetes_version
+  vnet_subnet_id          = data.azurerm_subnet.aks.id
+  os_sku                  = var.os_sku
+  host_encryption_enabled = var.host_encryption_enabled
+  tags                    = local.tags
 
   # System pool - minimal, always-on for cluster components
   system_pool_config = {

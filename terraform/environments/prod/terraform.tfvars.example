@@ -1,0 +1,51 @@
+###############################################################################
+# Example Terraform Variables
+# Copy this file to terraform.tfvars and update values for your environment
+###############################################################################
+
+###############################################################################
+# Required Variables
+###############################################################################
+
+# Azure subscription ID
+subscription_id = "00000000-0000-0000-0000-000000000000"
+
+# Existing resource group for AKS deployment
+resource_group_name = "rg-aks-prod"
+
+# Existing virtual network configuration
+vnet_name                = "vnet-aks"
+vnet_resource_group_name = "rg-network"  # Set to null or remove if same as resource_group_name
+subnet_name              = "snet-aks"
+
+###############################################################################
+# Optional Variables (defaults shown)
+###############################################################################
+
+# Environment name
+environment = "prod"
+
+# Azure region
+location = "australiaeast"
+
+# Kubernetes version (check supported versions: az aks get-versions -l australiaeast)
+kubernetes_version = "1.34"
+
+# AKS cluster name prefix (final name will be: <prefix>-<environment>)
+cluster_name_prefix = "aks-spot"
+
+# OS SKU for node pools
+# Options: "Ubuntu" (auto-selects latest), "Ubuntu2404", "AzureLinux"
+os_sku = "Ubuntu"
+
+# Enable host-based encryption (requires EncryptionAtHost feature on subscription)
+host_encryption_enabled = false
+
+# Log Analytics retention period (days)
+log_analytics_retention_days = 30
+
+# Additional tags to apply to all resources
+extra_tags = {
+  cost_center = "platform"
+  owner       = "devops-team"
+}

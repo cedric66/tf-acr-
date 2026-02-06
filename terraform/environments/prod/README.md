@@ -1,40 +1,51 @@
 # Production Environment - AKS Spot-Optimized
 
-This environment deploys an AKS cluster optimized for cost savings using Azure Spot VMs.
+Deploy an AKS cluster optimized for cost savings using Azure Spot VMs.
 
-## Prerequisites
+## Quick Start
 
-Before deploying, update the following placeholder values in `main.tf`:
+```bash
+# 1. Copy and configure tfvars
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with your values
 
-| Placeholder | Description |
-|-------------|-------------|
-| `subscription_id` | Your Azure subscription ID |
-| `rg-xxxxxx` | Existing resource group name |
-| `vnet-xxxxxx` | Existing virtual network name |
-| `snet-xxxxxx` | Existing subnet name |
+# 2. Initialize and deploy
+terraform init
+terraform plan
+terraform apply
+```
+
+## Required Variables
+
+| Variable | Description |
+|----------|-------------|
+| `subscription_id` | Azure subscription ID |
+| `resource_group_name` | Existing resource group for AKS |
+| `vnet_name` | Existing virtual network name |
+| `subnet_name` | Existing subnet name for AKS nodes |
+
+## Optional Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `vnet_resource_group_name` | (same as RG) | VNet's resource group if different |
+| `environment` | `prod` | Environment name |
+| `location` | `australiaeast` | Azure region |
+| `kubernetes_version` | `1.34` | Kubernetes version |
+| `cluster_name_prefix` | `aks-spot` | Cluster name prefix |
+| `os_sku` | `Ubuntu` | Node OS (Ubuntu, Ubuntu2404, AzureLinux) |
+| `host_encryption_enabled` | `false` | Enable host-based encryption |
+| `log_analytics_retention_days` | `30` | Log Analytics retention |
+| `extra_tags` | `{}` | Additional resource tags |
 
 ## Architecture
 
 - **Backend**: Local state (for development/testing)
-- **Resource Group**: Uses existing RG via data source
 - **Networking**: Uses existing VNet and subnet via data sources
 - **AKS Cluster**: Spot-optimized with:
-  - System node pool (always-on)
+  - System node pool (always-on, 3 AZs)
   - Standard workload pool (fallback)
-  - 3 Spot node pools (diversified VM sizes)
-
-## Usage
-
-```bash
-# Initialize Terraform
-terraform init
-
-# Plan changes
-terraform plan
-
-# Apply configuration
-terraform apply
-```
+  - 3 Spot node pools (diversified VM sizes across zones)
 
 ## Outputs
 
@@ -45,3 +56,12 @@ terraform apply
 | `kube_config_command` | kubectl configuration command |
 | `node_pools_summary` | Summary of all node pools |
 | `priority_expander_manifest` | Priority expander ConfigMap YAML |
+
+## Features
+
+- ✅ Kubernetes 1.34 (latest)
+- ✅ Ubuntu 24.04 LTS (auto-selected for K8s 1.35+)
+- ✅ `scale_down_mode=Delete` for spot pools
+- ✅ Priority expander for autoscaler
+- ✅ Azure Monitor integration
+- ✅ Azure AD RBAC enabled

@@ -1,0 +1,44 @@
+# Descheduler Helm Values
+# Configured for AKS spot pool rebalancing
+
+deschedulerPolicy:
+  strategies:
+    # Rebalance pods when topology spread is violated (after spot eviction)
+    RemovePodsViolatingTopologySpreadConstraint:
+      enabled: true
+      params:
+        includingEphemeralStorage: true
+
+    # Move pods when node affinity no longer matches
+    RemovePodsViolatingNodeAffinity:
+      enabled: true
+      params:
+        nodeAffinityType:
+          - requiredDuringSchedulingIgnoredDuringExecution
+
+    # Balance pods across underutilized nodes
+    LowNodeUtilization:
+      enabled: true
+      params:
+        nodeResourceUtilizationThresholds:
+          thresholds:
+            cpu: 20
+            memory: 20
+            pods: 20
+          targetThresholds:
+            cpu: 50
+            memory: 50
+            pods: 50
+
+    # Remove duplicates (multiple pods of same controller on same node)
+    RemoveDuplicates:
+      enabled: true
+
+# Run every 5 minutes
+deschedulingInterval: 5m
+
+# Don't evict pods with local storage
+evictLocalStoragePods: false
+
+# Respect PodDisruptionBudgets
+ignorePvcPods: false

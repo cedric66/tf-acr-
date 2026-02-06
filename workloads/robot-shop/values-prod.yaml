@@ -1,0 +1,141 @@
+# Robot Shop Helm Values - Production
+# Configured for AKS spot pool resilience testing
+# Uses Pod Topology Spread + Tolerations + Anti-Affinity
+
+###############################################################################
+# Image Configuration
+###############################################################################
+image:
+  repo: robotshop
+  version: latest
+  pullPolicy: IfNotPresent
+
+###############################################################################
+# Stateful Services → Standard (On-Demand) Pools
+# These cannot tolerate spot evictions
+###############################################################################
+
+mongodb:
+  nodeSelector:
+    agentpool: stdfallback
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                service: mongodb
+            topologyKey: kubernetes.io/hostname
+
+mysql:
+  nodeSelector:
+    agentpool: stdfallback
+
+rabbitmq:
+  nodeSelector:
+    agentpool: stdfallback
+
+redis:
+  nodeSelector:
+    agentpool: stdfallback
+  storageClassName: managed-csi
+
+###############################################################################
+# Stateless Services → Spot Pools
+# These can tolerate evictions and will be rescheduled
+###############################################################################
+
+web:
+  tolerations:
+    - key: "kubernetes.azure.com/scalesetpriority"
+      operator: "Equal"
+      value: "spot"
+      effect: "NoSchedule"
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchLabels:
+              service: web
+          topologyKey: topology.kubernetes.io/zone
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          service: web
+      minDomains: 2
+
+cart:
+  tolerations:
+    - key: "kubernetes.azure.com/scalesetpriority"
+      operator: "Equal"
+      value: "spot"
+      effect: "NoSchedule"
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                service: cart
+            topologyKey: topology.kubernetes.io/zone
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          service: cart
+
+catalogue:
+  tolerations:
+    - key: "kubernetes.azure.com/scalesetpriority"
+      operator: "Equal"
+      value: "spot"
+      effect: "NoSchedule"
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          service: catalogue
+
+dispatch:
+  tolerations:
+    - key: "kubernetes.azure.com/scalesetpriority"
+      operator: "Equal"
+      value: "spot"
+      effect: "NoSchedule"
+
+payment:
+  tolerations:
+    - key: "kubernetes.azure.com/scalesetpriority"
+      operator: "Equal"
+      value: "spot"
+      effect: "NoSchedule"
+
+ratings:
+  tolerations:
+    - key: "kubernetes.azure.com/scalesetpriority"
+      operator: "Equal"
+      value: "spot"
+      effect: "NoSchedule"
+
+shipping:
+  tolerations:
+    - key: "kubernetes.azure.com/scalesetpriority"
+      operator: "Equal"
+      value: "spot"
+      effect: "NoSchedule"
+
+user:
+  tolerations:
+    - key: "kubernetes.azure.com/scalesetpriority"
+      operator: "Equal"
+      value: "spot"
+      effect: "NoSchedule"

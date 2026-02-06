@@ -67,6 +67,12 @@ project-root/
     *   Reduce `maxSurge` percentage in spot pools (spot cannot use `maxUnavailable`).
     *   Example: Standard pools use `max_unavailable = "1"`, spot pools use `max_surge = "10%"`.
 
+6.  **Spot Pool Resilience** (Azure-specific):
+    *   **ALWAYS** configure each spot pool with **1 zone + 1 SKU family**.
+    *   **NEVER** give multiple zones to a single spot pool (VMSS pins to one zone).
+    *   Use multiple VM families (D, E, F-series) across pools for SKU diversity.
+    *   Standard pools provide fallback when all spot pools are exhausted.
+
 ---
 
 ## 2. Terraform Workflow with tfvars

@@ -35,54 +35,109 @@ host_encryption_enabled = false
 log_analytics_retention_days = 30
 
 ###############################################################################
-# Optional: Node Pool Configurations
-# Uncomment and modify to override defaults
+# Node Pool Configurations - RESILIENCE STRATEGY
+# 
+# IMPORTANT: Each spot pool uses ONE ZONE + ONE SKU FAMILY
+# This ensures if one SKU/Zone fails, others can still spin up nodes
 ###############################################################################
 
 # System node pool (required for cluster)
-# system_pool_config = {
-#   name                = "system"
-#   vm_size             = "Standard_D4s_v5"
-#   min_count           = 3
-#   max_count           = 5
-#   zones               = ["1", "2", "3"]
-#   os_disk_size_gb     = 128
-#   enable_auto_scaling = true
-# }
+system_pool_config = {
+  name                = "system"
+  vm_size             = "Standard_D4s_v5"
+  min_count           = 3
+  max_count           = 5
+  zones               = ["1", "2", "3"]
+  os_disk_size_gb     = 128
+  enable_auto_scaling = true
+}
 
-# Standard (on-demand) node pools
-# standard_pool_configs = [
-#   {
-#     name                = "stdworkload"
-#     vm_size             = "Standard_D4s_v5"
-#     min_count           = 2
-#     max_count           = 15
-#     zones               = ["1", "2"]
-#     os_disk_size_gb     = 128
-#     enable_auto_scaling = true
-#     labels = {
-#       "workload-tier" = "production"
-#     }
-#   }
-# ]
+# Standard (on-demand) node pools - FALLBACK for spot failures
+standard_pool_configs = [
+  {
+    name                = "stdfallback"
+    vm_size             = "Standard_D4s_v5"
+    min_count           = 2
+    max_count           = 15
+    zones               = ["1", "2", "3"]
+    os_disk_size_gb     = 128
+    enable_auto_scaling = true
+    labels = {
+      "workload-tier" = "production"
+      "priority"      = "on-demand"
+    }
+  }
+]
 
-# Spot node pools (cost-optimized)
-# spot_pool_configs = [
-#   {
-#     name            = "spotgen1"
-#     vm_size         = "Standard_D4s_v5"
-#     min_count       = 0
-#     max_count       = 25
-#     zones           = ["1"]
-#     spot_max_price  = -1
-#     eviction_policy = "Delete"
-#     priority_weight = 10
-#     labels = {
-#       "spot-pool-id" = "1"
-#       "vm-family"    = "general"
-#     }
-#   }
-# ]
+# Spot node pools - DIVERSIFIED STRATEGY
+# Each pool: 1 zone + 1 SKU family = maximum resilience
+spot_pool_configs = [
+  # Zone 1: D-series (general purpose, 4 vCPU)
+  {
+    name            = "spot-d4-z1"
+    vm_size         = "Standard_D4s_v5"
+    min_count       = 0
+    max_count       = 25
+    zones           = ["1"]
+    spot_max_price  = -1
+    eviction_policy = "Delete"
+    priority_weight = 10
+    labels = {
+      "spot-pool-id" = "1"
+      "vm-family"    = "d-series"
+      "zone"         = "1"
+    }
+  },
+  # Zone 2: D-series (general purpose, 8 vCPU)
+  {
+    name            = "spot-d8-z2"
+    vm_size         = "Standard_D8s_v5"
+    min_count       = 0
+    max_count       = 15
+    zones           = ["2"]
+    spot_max_price  = -1
+    eviction_policy = "Delete"
+    priority_weight = 10
+    labels = {
+      "spot-pool-id" = "2"
+      "vm-family"    = "d-series"
+      "zone"         = "2"
+    }
+  },
+  # Zone 3: E-series (memory optimized)
+  {
+    name            = "spot-e4-z3"
+    vm_size         = "Standard_E4s_v5"
+    min_count       = 0
+    max_count       = 15
+    zones           = ["3"]
+    spot_max_price  = -1
+    eviction_policy = "Delete"
+    priority_weight = 10
+    labels = {
+      "spot-pool-id" = "3"
+      "vm-family"    = "e-series"
+      "zone"         = "3"
+    }
+  },
+  # Zone 1: F-series (compute optimized) - DIFFERENT FAMILY, SAME ZONE
+  # Provides fallback if D-series exhausted in zone 1
+  {
+    name            = "spot-f8-z1"
+    vm_size         = "Standard_F8s_v2"
+    min_count       = 0
+    max_count       = 10
+    zones           = ["1"]
+    spot_max_price  = -1
+    eviction_policy = "Delete"
+    priority_weight = 5 # Lower priority = backup option
+    labels = {
+      "spot-pool-id" = "4"
+      "vm-family"    = "f-series"
+      "zone"         = "1"
+    }
+  }
+]
 
 ###############################################################################
 # Optional: AAD & RBAC

@@ -96,6 +96,21 @@ module "aks" {
 }
 
 ###############################################################################
+# Diagnostics - Event Capture for Observation
+###############################################################################
+
+module "diagnostics" {
+  source = "../../modules/diagnostics"
+
+  resource_group_name        = data.azurerm_resource_group.main.name
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
+  aks_cluster_id             = module.aks.cluster_id
+  subscription_id            = var.subscription_id
+  environment                = var.environment
+  tags                       = local.tags
+}
+
+###############################################################################
 # Outputs
 ###############################################################################
 
@@ -123,3 +138,4 @@ output "priority_expander_manifest" {
   description = "Priority expander ConfigMap for kubectl apply"
   value       = module.aks.priority_expander_configmap
 }
+

@@ -44,24 +44,73 @@ The core logic is encapsulated in the Terraform module: `terraform/modules/aks-s
 To deploy a spot-optimized cluster, reference the module in your environment configuration (e.g., `terraform/environments/prod/main.tf`):
 
 ```hcl
-module "aks_cluster" {
+module "aks" {
   source = "../../modules/aks-spot-optimized"
 
-  cluster_name = "aks-prod-001"
-  location     = "australiaeast"
+  cluster_name            = "aks-spot-prod"
+  resource_group_name     = data.azurerm_resource_group.main.name
+  location                = "australiaeast"
+  kubernetes_version      = "1.30"
+  vnet_subnet_id          = data.azurerm_subnet.aks.id
   
-  # Define Spot Pools
-  spot_node_pools = {
-    "spot_general" = {
-      vm_size = "Standard_D4s_v5"
-      min_count = 3
-      max_count = 20
-    }
+  # 1. System Pool (Critical Cluster Services)
+  system_pool_config = {
+    name      = "system"
+    vm_size   = "Standard_D4s_v5"
+    min_count = 3
+    max_count = 5
+    zones     = ["1", "2", "3"]
   }
+
+  # 2. Standard Pools (Fallback & Critical Workloads)
+  standard_pool_configs = [{
+    name      = "stdworkload"
+    vm_size   = "Standard_D4s_v5"
+    min_count = 2
+    max_count = 10
+    zones     = ["1", "2", "3"]
+  }]
+
+  # 3. Spot Pools (Diversified Strategy: 1 Zone + 1 SKU per pool)
+  spot_pool_configs = [
+    { name = "spot-d4-z1", vm_size = "Standard_D4s_v5", zones = ["1"], ... },
+    { name = "spot-d8-z2", vm_size = "Standard_D8s_v5", zones = ["2"], ... },
+    { name = "spot-e4-z3", vm_size = "Standard_E4s_v5", zones = ["3"], ... }
+  ]
+}
+
+module "diagnostics" {
+  source = "../../modules/diagnostics"
+  # Exports Activity Logs & AKS Diagnostics to Log Analytics
+  # Critical for post-mortem of spot evictions and scaling events
 }
 ```
 
+**Deployment Workflow**:
+1.  Initialize: `terraform init`
+2.  Configure: Copy `terraform.tfvars.example` to `terraform.tfvars`
+3.  Deploy: `terraform apply`
+
 Reference the [Consolidated Project Brief](CONSOLIDATED_PROJECT_BRIEF.md) for a high-level summary.
+
+## 🎯 Workload Deployment (Isolated)
+
+Workload manifests are **isolated from cluster infrastructure** in the `workloads/` directory.
+
+| Workload | Purpose |
+|----------|---------|
+| [Robot Shop](workloads/robot-shop/) | E-commerce microservices for spot testing |
+| [Descheduler](workloads/descheduler/) | Auto-rebalance after evictions |
+
+**Deployment Order**:
+```bash
+# 1. Deploy Descheduler (handles rebalancing)
+cd workloads/descheduler && ./deploy.sh
+
+# 2. Deploy Robot Shop (test workload)
+cd workloads/robot-shop && ./deploy.sh
+kubectl apply -f workloads/robot-shop/pdbs.yaml
+```
 
 ## 📚 Documentation Index
 

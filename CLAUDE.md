@@ -310,3 +310,34 @@ After completing changes that affect scope, architecture, metrics, or roadmap:
 | `scripts/simulate_spot_contention.sh` | Bash | Kind-based spot eviction chaos testing |
 | `scripts/convert_docs_for_word.py` | Python | Convert markdown docs to Word-compatible format |
 | `scripts/decrypt-repo.sh` | Bash | Decrypt sensitive repository content |
+
+## 🧠 Agent Skills & Best Practices
+
+Derived from `.agent/skills/terraform_skill/SKILL.md`.
+
+### Terraform Structure (Mandatory)
+- **Separate Providers**: `provider.tf` in each environment, never in modules.
+- **No Hardcoded Values**: Use `variables.tf` + `terraform.tfvars`.
+- **Optional Tags**: `variable "tags" { default = {} }` in every module.
+
+### Spot Resilience Rules
+1. **IP Planning**: Use `maxUnavailable` for standard, `maxSurge` for spot.
+2. **Diversity**: Each spot pool = **1 Zone + 1 SKU Family**.
+3. **Fallback**: Always maintain a Standard On-Demand pool.
+
+### Local Simulation (Kind)
+Test spot tolerance without Azure costs:
+
+```bash
+# 1. Create Cluster
+kind create cluster --config kind-config.yaml --name spot-sim
+
+# 2. Taint Node (Simulate Spot)
+kubectl taint nodes spot-worker lifecycle=spot:NoSchedule
+
+# 3. Deploy
+kubectl apply -f spot-deployment.yaml
+
+# 4. Simulate Eviction
+kubectl drain spot-worker --ignore-daemonsets --delete-emptydir-data
+```

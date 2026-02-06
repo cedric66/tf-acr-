@@ -1,0 +1,86 @@
+# PodDisruptionBudgets for Robot Shop
+# Prevents cascade failures during spot evictions
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web-pdb
+  namespace: robot-shop
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      service: web
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: cart-pdb
+  namespace: robot-shop
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      service: cart
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: catalogue-pdb
+  namespace: robot-shop
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      service: catalogue
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mongodb-pdb
+  namespace: robot-shop
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      service: mongodb
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mysql-pdb
+  namespace: robot-shop
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      service: mysql
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redis-pdb
+  namespace: robot-shop
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      service: redis
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: rabbitmq-pdb
+  namespace: robot-shop
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      service: rabbitmq

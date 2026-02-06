@@ -32,8 +32,10 @@ resource "azurerm_kubernetes_cluster_node_pool" "standard" {
   node_labels = local.standard_pool_labels[each.key]
   node_taints = each.value.taints
 
+  # IP-optimized upgrade settings: Standard pools can use maxUnavailable
+  # to avoid surge IP consumption during updates
   upgrade_settings {
-    max_surge = "25%"
+    max_unavailable = "1"
   }
 
   tags = merge(var.tags, {
@@ -87,8 +89,10 @@ resource "azurerm_kubernetes_cluster_node_pool" "spot" {
     each.value.taints
   )
 
+  # Spot pools: Use reduced maxSurge to minimize IP consumption.
+  # Note: Spot pools cannot use maxUnavailable (not supported by Azure)
   upgrade_settings {
-    max_surge = "25%"
+    max_surge = "10%"
   }
 
   tags = merge(var.tags, {

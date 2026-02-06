@@ -93,6 +93,129 @@ variable "log_analytics_retention_days" {
 }
 
 ###############################################################################
+# Node Pool Configurations
+###############################################################################
+
+variable "system_pool_config" {
+  description = "System node pool configuration"
+  type = object({
+    name                = string
+    vm_size             = string
+    min_count           = number
+    max_count           = number
+    zones               = list(string)
+    os_disk_size_gb     = number
+    enable_auto_scaling = bool
+  })
+  default = {
+    name                = "system"
+    vm_size             = "Standard_D4s_v5"
+    min_count           = 3
+    max_count           = 5
+    zones               = ["1", "2", "3"]
+    os_disk_size_gb     = 128
+    enable_auto_scaling = true
+  }
+}
+
+variable "standard_pool_configs" {
+  description = "Standard (on-demand) node pool configurations"
+  type = list(object({
+    name                = string
+    vm_size             = string
+    min_count           = number
+    max_count           = number
+    zones               = list(string)
+    os_disk_size_gb     = number
+    enable_auto_scaling = bool
+    labels              = optional(map(string), {})
+  }))
+  default = [
+    {
+      name                = "stdworkload"
+      vm_size             = "Standard_D4s_v5"
+      min_count           = 2
+      max_count           = 15
+      zones               = ["1", "2"]
+      os_disk_size_gb     = 128
+      enable_auto_scaling = true
+      labels = {
+        "workload-tier" = "production"
+      }
+    }
+  ]
+}
+
+variable "spot_pool_configs" {
+  description = "Spot node pool configurations"
+  type = list(object({
+    name            = string
+    vm_size         = string
+    min_count       = number
+    max_count       = number
+    zones           = list(string)
+    spot_max_price  = number
+    eviction_policy = string
+    priority_weight = number
+    labels          = optional(map(string), {})
+  }))
+  default = [
+    {
+      name            = "spotgen1"
+      vm_size         = "Standard_D4s_v5"
+      min_count       = 0
+      max_count       = 25
+      zones           = ["1"]
+      spot_max_price  = -1
+      eviction_policy = "Delete"
+      priority_weight = 10
+      labels = {
+        "spot-pool-id" = "1"
+        "vm-family"    = "general"
+      }
+    },
+    {
+      name            = "spotgen2"
+      vm_size         = "Standard_D8s_v5"
+      min_count       = 0
+      max_count       = 15
+      zones           = ["2"]
+      spot_max_price  = -1
+      eviction_policy = "Delete"
+      priority_weight = 10
+      labels = {
+        "spot-pool-id" = "2"
+        "vm-family"    = "general"
+      }
+    },
+    {
+      name            = "spotcomp"
+      vm_size         = "Standard_F8s_v2"
+      min_count       = 0
+      max_count       = 10
+      zones           = ["3"]
+      spot_max_price  = -1
+      eviction_policy = "Delete"
+      priority_weight = 10
+      labels = {
+        "spot-pool-id" = "3"
+        "vm-family"    = "compute"
+      }
+    }
+  ]
+}
+
+###############################################################################
+# AAD & RBAC
+###############################################################################
+
+variable "admin_group_object_ids" {
+  description = "Azure AD group object IDs for cluster admin access"
+  type        = list(string)
+  default     = []
+}
+
+###############################################################################
 # Tags
 ###############################################################################
 

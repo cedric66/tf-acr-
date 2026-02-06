@@ -106,11 +106,11 @@ resource "azurerm_kubernetes_cluster" "nap" {
 
   # System node pool (always on-demand for stability)
   default_node_pool {
-    name                = "system"
-    node_count          = 2
-    vm_size             = "Standard_D4s_v5"
-    os_disk_size_gb     = 128
-    zones               = ["1", "2", "3"]
+    name                         = "system"
+    node_count                   = 2
+    vm_size                      = "Standard_D4s_v5"
+    os_disk_size_gb              = 128
+    zones                        = ["1", "2", "3"]
     only_critical_addons_enabled = true
 
     node_labels = {
@@ -130,7 +130,7 @@ resource "azurerm_kubernetes_cluster" "nap" {
   workload_identity_enabled = true
 
   tags = {
-    Environment = "Prototype"
+    Environment      = "Prototype"
     NodeProvisioning = "Karpenter-NAP"
   }
 }

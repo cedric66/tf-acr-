@@ -22,21 +22,28 @@ project-root/
 │
 └── environments/            # Deployable instances (Stateful)
     ├── dev/                 # Development environment
+    │   ├── provider.tf      #   - REQUIRED: Provider & backend config
     │   ├── main.tf          #   - Calls ../../modules
     │   ├── variables.tf     #   - Defines environment inputs
     │   ├── terraform.tfvars #   - Values (git-ignored if sensitive)
-    │   └── backend.tf       #   - State configuration
+    │   └── outputs.tf       #   - Environment outputs
     │
     └── prod/                # Production environment
+        ├── provider.tf      #   - REQUIRED: Provider & backend config
         ├── main.tf
         ├── variables.tf
         ├── terraform.tfvars
-        └── backend.tf
+        └── outputs.tf
 ```
 
 ### Configuration Rules
 
-1.  **Modules vs. Environments**:
+1.  **Provider Configuration**:
+    *   **ALWAYS** create a `provider.tf` file in each environment directory.
+    *   `provider.tf` must contain the `terraform` block, `required_providers`, and `provider` configuration.
+    *   **NEVER** put provider configuration in `main.tf`.
+
+2.  **Modules vs. Environments**:
     *   **Modules** contain logic and resources. They **must not** contain provider configurations or backend settings.
     *   **Environments** contain state and values. They simple instantiate modules.
 
@@ -53,6 +60,12 @@ project-root/
     *   **NEVER** hardcode tags in `main.tf` or `locals`.
     *   **ALWAYS** define a generic `tags` variable (map) with an empty default `{}`.
     *   Tags should be completely optional and controlled strictly via `terraform.tfvars`.
+
+5.  **AKS IP Planning** (Azure-specific):
+    *   Calculate IP requirements: `(max_nodes × max_pods) + surge_IPs + system_overhead`.
+    *   Use `maxUnavailable` in standard pools to avoid surge IP consumption.
+    *   Reduce `maxSurge` percentage in spot pools (spot cannot use `maxUnavailable`).
+    *   Example: Standard pools use `max_unavailable = "1"`, spot pools use `max_surge = "10%"`.
 
 ---
 

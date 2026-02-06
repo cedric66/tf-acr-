@@ -1,6 +1,23 @@
 ###############################################################################
 # AKS Spot-Optimized Module - Main Configuration
 # Purpose: Create AKS cluster with cost-optimized spot node pool strategy
+#
+# IP OPTIMIZATION STRATEGY:
+# -------------------------
+# This module implements IP-efficient upgrade strategies to minimize subnet
+# IP consumption during node pool upgrades:
+#
+# 1. Standard Pools: Use maxUnavailable (no surge IPs)
+#    - Updates nodes one at a time without creating surge capacity
+#    - Zero additional IP consumption during upgrades
+#    - Best for IP-constrained subnets
+#
+# 2. Spot Pools: Use reduced maxSurge (10% instead of 25%)
+#    - Azure spot pools cannot use maxUnavailable (platform limitation)
+#    - Reduced surge percentage balances upgrade speed with IP overhead
+#    - Example: 25-node pool creates only 3 surge nodes (vs 7 at 25%)
+#
+# IP Calculation: Required_IPs = (max_nodes × max_pods) + surge + overhead
 ###############################################################################
 
 terraform {

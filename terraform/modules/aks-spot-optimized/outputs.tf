@@ -52,8 +52,8 @@ output "cluster_identity" {
 output "kubelet_identity" {
   description = "The kubelet identity for the AKS cluster"
   value = {
-    client_id   = azurerm_kubernetes_cluster.main.kubelet_identity[0].client_id
-    object_id   = azurerm_kubernetes_cluster.main.kubelet_identity[0].object_id
+    client_id                 = azurerm_kubernetes_cluster.main.kubelet_identity[0].client_id
+    object_id                 = azurerm_kubernetes_cluster.main.kubelet_identity[0].object_id
     user_assigned_identity_id = azurerm_kubernetes_cluster.main.kubelet_identity[0].user_assigned_identity_id
   }
 }
@@ -70,9 +70,9 @@ output "node_resource_group" {
 output "system_node_pool" {
   description = "Information about the system node pool"
   value = {
-    name     = azurerm_kubernetes_cluster.main.default_node_pool[0].name
-    vm_size  = azurerm_kubernetes_cluster.main.default_node_pool[0].vm_size
-    zones    = azurerm_kubernetes_cluster.main.default_node_pool[0].zones
+    name      = azurerm_kubernetes_cluster.main.default_node_pool[0].name
+    vm_size   = azurerm_kubernetes_cluster.main.default_node_pool[0].vm_size
+    zones     = azurerm_kubernetes_cluster.main.default_node_pool[0].zones
     min_count = azurerm_kubernetes_cluster.main.default_node_pool[0].min_count
     max_count = azurerm_kubernetes_cluster.main.default_node_pool[0].max_count
   }
@@ -113,10 +113,10 @@ output "spot_node_pools" {
 output "all_node_pools_summary" {
   description = "Summary of all node pools for quick reference"
   value = {
-    total_pools = 1 + length(var.standard_pool_configs) + length(var.spot_pool_configs)
-    system_pools = 1
-    standard_pools = length(var.standard_pool_configs)
-    spot_pools = length(var.spot_pool_configs)
+    total_pools        = 1 + length(var.standard_pool_configs) + length(var.spot_pool_configs)
+    system_pools       = 1
+    standard_pools     = length(var.standard_pool_configs)
+    spot_pools         = length(var.spot_pool_configs)
     spot_pool_vm_sizes = [for pool in var.spot_pool_configs : pool.vm_size]
   }
 }
@@ -148,6 +148,6 @@ output "estimated_cost_savings" {
     spot_discount_percentage = "60-90%"
     recommended_spot_ratio   = "60-80%"
     fallback_capacity_ratio  = "20-40%"
-    note = "Actual savings depend on spot availability and eviction rates"
+    note                     = "Actual savings depend on spot availability and eviction rates"
   }
 }

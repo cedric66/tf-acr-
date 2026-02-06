@@ -96,7 +96,7 @@ resource "azurerm_kubernetes_cluster" "main" {
     auto_scaling_enabled         = var.system_pool_config.enable_auto_scaling
     host_encryption_enabled      = var.host_encryption_enabled
     vnet_subnet_id               = var.vnet_subnet_id
-    only_critical_addons_enabled = true  # System pool - only kube-system pods
+    only_critical_addons_enabled = true # System pool - only kube-system pods
     node_labels                  = local.system_pool_labels
 
     upgrade_settings {
@@ -166,7 +166,7 @@ resource "azurerm_kubernetes_cluster" "main" {
 
   lifecycle {
     ignore_changes = [
-      default_node_pool[0].node_count  # Managed by autoscaler
+      default_node_pool[0].node_count # Managed by autoscaler
     ]
   }
 }

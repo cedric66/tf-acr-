@@ -54,9 +54,14 @@ variable "location" {
 }
 
 variable "kubernetes_version" {
-  description = "Kubernetes version for the cluster"
+  description = "Kubernetes version for the cluster (check: az aks get-versions -l <location>)"
   type        = string
   default     = "1.34"
+
+  validation {
+    condition     = can(regex("^1\\.(3[0-9]|[4-9][0-9])$", var.kubernetes_version))
+    error_message = "Kubernetes version must be 1.30 or higher (e.g., 1.34, 1.35)."
+  }
 }
 
 variable "cluster_name_prefix" {

@@ -73,9 +73,9 @@ module "aks" {
 
   # 3. Spot Pools (Diversified Strategy: 1 Zone + 1 SKU per pool)
   spot_pool_configs = [
-    { name = "spot-d4-z1", vm_size = "Standard_D4s_v5", zones = ["1"], ... },
-    { name = "spot-d8-z2", vm_size = "Standard_D8s_v5", zones = ["2"], ... },
-    { name = "spot-e4-z3", vm_size = "Standard_E4s_v5", zones = ["3"], ... }
+    { name = "spotd4z1", vm_size = "Standard_D4s_v5", zones = ["1"], ... },
+    { name = "spotd8z2", vm_size = "Standard_D8s_v5", zones = ["2"], ... },
+    { name = "spote4z3", vm_size = "Standard_E4s_v5", zones = ["3"], ... }
   ]
 }
 

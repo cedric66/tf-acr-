@@ -325,6 +325,11 @@ Derived from `.agent/skills/terraform_skill/SKILL.md`.
 2. **Diversity**: Each spot pool = **1 Zone + 1 SKU Family**.
 3. **Fallback**: Always maintain a Standard On-Demand pool.
 
+### Naming Rules
+- **Node Pools**: Lowercase alphanumeric only (no hyphens). Max 12 chars.
+  - Good: `spotd4z1`
+  - Bad: `spot-d4-z1`
+
 ### Local Simulation (Kind)
 Test spot tolerance without Azure costs:
 

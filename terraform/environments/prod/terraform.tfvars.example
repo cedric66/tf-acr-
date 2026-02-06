@@ -45,8 +45,8 @@ log_analytics_retention_days = 30
 system_pool_config = {
   name                = "system"
   vm_size             = "Standard_D4s_v5"
-  min_count           = 3
-  max_count           = 5
+  min_count           = 2
+  max_count           = 3
   zones               = ["1", "2", "3"]
   os_disk_size_gb     = 128
   enable_auto_scaling = true
@@ -57,8 +57,8 @@ standard_pool_configs = [
   {
     name                = "stdfallback"
     vm_size             = "Standard_D4s_v5"
-    min_count           = 2
-    max_count           = 15
+    min_count           = 1
+    max_count           = 2
     zones               = ["1", "2", "3"]
     os_disk_size_gb     = 128
     enable_auto_scaling = true
@@ -74,10 +74,10 @@ standard_pool_configs = [
 spot_pool_configs = [
   # Zone 1: D-series (general purpose, 4 vCPU)
   {
-    name            = "spot-d4-z1"
+    name            = "spotd4z1"
     vm_size         = "Standard_D4s_v5"
     min_count       = 0
-    max_count       = 25
+    max_count       = 3
     zones           = ["1"]
     spot_max_price  = -1
     eviction_policy = "Delete"
@@ -90,10 +90,10 @@ spot_pool_configs = [
   },
   # Zone 2: D-series (general purpose, 8 vCPU)
   {
-    name            = "spot-d8-z2"
+    name            = "spotd8z2"
     vm_size         = "Standard_D8s_v5"
     min_count       = 0
-    max_count       = 15
+    max_count       = 3
     zones           = ["2"]
     spot_max_price  = -1
     eviction_policy = "Delete"
@@ -106,10 +106,10 @@ spot_pool_configs = [
   },
   # Zone 3: E-series (memory optimized)
   {
-    name            = "spot-e4-z3"
+    name            = "spote4z3"
     vm_size         = "Standard_E4s_v5"
     min_count       = 0
-    max_count       = 15
+    max_count       = 3
     zones           = ["3"]
     spot_max_price  = -1
     eviction_policy = "Delete"
@@ -123,10 +123,10 @@ spot_pool_configs = [
   # Zone 1: F-series (compute optimized) - DIFFERENT FAMILY, SAME ZONE
   # Provides fallback if D-series exhausted in zone 1
   {
-    name            = "spot-f8-z1"
+    name            = "spotf8z1"
     vm_size         = "Standard_F8s_v2"
     min_count       = 0
-    max_count       = 10
+    max_count       = 3
     zones           = ["1"]
     spot_max_price  = -1
     eviction_policy = "Delete"

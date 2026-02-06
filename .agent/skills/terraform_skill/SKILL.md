@@ -73,6 +73,11 @@ project-root/
     *   Use multiple VM families (D, E, F-series) across pools for SKU diversity.
     *   Standard pools provide fallback when all spot pools are exhausted.
 
+7.  **Node Pool Naming** (AKS Strict Limits):
+    *   **Must be lowercase alphanumeric** (a-z, 0-9). **NO hyphens** or underscores.
+    *   **Max length**: 12 characters for Linux, 6 characters for Windows.
+    *   Example: `spotd4z1` (Valid), `spot-d4-z1` (Invalid).
+
 ---
 
 ## 2. Terraform Workflow with tfvars

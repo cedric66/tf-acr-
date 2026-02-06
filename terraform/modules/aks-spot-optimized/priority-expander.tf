@@ -7,7 +7,7 @@
 # Without this ConfigMap, the autoscaler silently falls back to `random`.
 ###############################################################################
 
-resource "kubernetes_config_map" "priority_expander" {
+resource "kubernetes_config_map_v1" "priority_expander" {
   count = var.deploy_priority_expander ? 1 : 0
 
   metadata {

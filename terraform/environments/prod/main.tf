@@ -12,17 +12,17 @@ terraform {
     }
   }
 
-  # Backend configuration - update for your environment
-  # backend "azurerm" {
-  #   resource_group_name  = "rg-terraform-state"
-  #   storage_account_name = "sttfstate"
-  #   container_name       = "tfstate"
-  #   key                  = "aks-prod.tfstate"
-  # }
+  # Local backend for development/testing
+  backend "local" {}
 }
 
 provider "azurerm" {
-  features {}
+  features {
+    resource_group {
+      prevent_deletion_if_contains_resources = false
+    }
+  }
+  subscription_id = "00000000-0000-0000-0000-000000000000"  # Update with your subscription ID
 }
 
 ###############################################################################
@@ -33,42 +33,35 @@ locals {
   environment = "prod"
   location    = "australiaeast"
   
+  # Workspace-required tags
   tags = {
-    Environment   = local.environment
-    Project       = "aks-cost-optimization"
-    ManagedBy     = "terraform"
-    CostCenter    = "platform"
-    LastUpdated   = timestamp()
+    environment = local.environment
+    location    = local.location
+    managed_by  = "terraform"
+    project     = "aks-spot-optimization"
   }
 }
 
 ###############################################################################
-# Resource Group
+# Data Sources - Existing Resources
 ###############################################################################
 
-resource "azurerm_resource_group" "main" {
-  name     = "rg-aks-${local.environment}"
-  location = local.location
-  tags     = local.tags
+# Use existing resource group
+data "azurerm_resource_group" "main" {
+  name = "rg-xxxxxx"  # Update with your existing resource group name
 }
 
-###############################################################################
-# Virtual Network
-###############################################################################
-
-resource "azurerm_virtual_network" "main" {
-  name                = "vnet-aks-${local.environment}"
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
-  address_space       = ["10.0.0.0/16"]
-  tags                = local.tags
+# Use existing virtual network
+data "azurerm_virtual_network" "main" {
+  name                = "vnet-xxxxxx"  # Update with your existing VNet name
+  resource_group_name = "rg-xxxxxx"    # Update with VNet's resource group
 }
 
-resource "azurerm_subnet" "aks" {
-  name                 = "snet-aks"
-  resource_group_name  = azurerm_resource_group.main.name
-  virtual_network_name = azurerm_virtual_network.main.name
-  address_prefixes     = ["10.0.0.0/22"]  # /22 = 1024 IPs for nodes
+# Use existing subnet
+data "azurerm_subnet" "aks" {
+  name                 = "snet-xxxxxx"                    # Update with your existing subnet name
+  virtual_network_name = data.azurerm_virtual_network.main.name
+  resource_group_name  = "rg-xxxxxx"                      # Update with VNet's resource group
 }
 
 ###############################################################################
@@ -77,8 +70,8 @@ resource "azurerm_subnet" "aks" {
 
 resource "azurerm_log_analytics_workspace" "main" {
   name                = "log-aks-${local.environment}"
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
+  location            = data.azurerm_resource_group.main.location
+  resource_group_name = data.azurerm_resource_group.main.name
   sku                 = "PerGB2018"
   retention_in_days   = 30
   tags                = local.tags
@@ -91,11 +84,11 @@ resource "azurerm_log_analytics_workspace" "main" {
 module "aks" {
   source = "../../modules/aks-spot-optimized"
 
-  cluster_name        = "aks-${local.environment}"
-  resource_group_name = azurerm_resource_group.main.name
-  location            = azurerm_resource_group.main.location
+  cluster_name        = "aks-spot-${local.environment}"
+  resource_group_name = data.azurerm_resource_group.main.name
+  location            = data.azurerm_resource_group.main.location
   kubernetes_version  = "1.28"
-  vnet_subnet_id      = azurerm_subnet.aks.id
+  vnet_subnet_id      = data.azurerm_subnet.aks.id
   tags                = local.tags
 
   # System pool - minimal, always-on for cluster components
@@ -219,7 +212,7 @@ output "node_pools_summary" {
 
 output "kube_config_command" {
   description = "Command to configure kubectl"
-  value       = "az aks get-credentials --resource-group ${azurerm_resource_group.main.name} --name ${module.aks.cluster_name}"
+  value       = "az aks get-credentials --resource-group ${data.azurerm_resource_group.main.name} --name ${module.aks.cluster_name}"
 }
 
 output "priority_expander_manifest" {

@@ -19,9 +19,21 @@ terraform {
 ###############################################################################
 
 locals {
-  # Common labels applied to all node pools
-  common_labels = merge(var.tags, {
-    "managed-by" = "terraform"
+  # Sanitize tag values to be valid Kubernetes labels
+  # Labels must: start/end with alphanumeric, contain only alphanumeric/-/_/., max 63 chars
+  sanitize_label = {
+    for k, v in var.tags : k => substr(
+      replace(
+        replace(lower(tostring(v)), "/[^a-z0-9-_.]/", "-"),
+        "/^[^a-z0-9]+|[^a-z0-9]+$/", ""
+      ),
+      0, 63
+    )
+  }
+
+  # Common labels applied to all node pools (using sanitized tags)
+  common_labels = merge(local.sanitize_label, {
+    "managed-by"        = "terraform"
     "cost-optimization" = "spot-enabled"
   })
 
@@ -152,8 +164,7 @@ resource "azurerm_kubernetes_cluster" "main" {
 
   lifecycle {
     ignore_changes = [
-      default_node_pool[0].node_count,  # Managed by autoscaler
-      tags["LastUpdated"]
+      default_node_pool[0].node_count  # Managed by autoscaler
     ]
   }
 }

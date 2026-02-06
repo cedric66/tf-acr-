@@ -91,8 +91,10 @@ resource "azurerm_kubernetes_cluster" "main" {
     zones                        = var.system_pool_config.zones
     os_disk_size_gb              = var.system_pool_config.os_disk_size_gb
     os_disk_type                 = var.system_pool_config.os_disk_type
+    os_sku                       = var.os_sku
     max_pods                     = var.system_pool_config.max_pods
     auto_scaling_enabled         = var.system_pool_config.enable_auto_scaling
+    host_encryption_enabled      = var.host_encryption_enabled
     vnet_subnet_id               = var.vnet_subnet_id
     only_critical_addons_enabled = true  # System pool - only kube-system pods
     node_labels                  = local.system_pool_labels

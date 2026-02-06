@@ -21,7 +21,7 @@ variable "location" {
 variable "kubernetes_version" {
   description = "Kubernetes version for the cluster"
   type        = string
-  default     = "1.28"
+  default     = "1.34"
 }
 
 variable "vnet_subnet_id" {
@@ -33,6 +33,18 @@ variable "tags" {
   description = "Tags to apply to all resources"
   type        = map(string)
   default     = {}
+}
+
+variable "os_sku" {
+  description = "OS SKU for node pools. Use 'Ubuntu' (auto-selects 24.04 for K8s 1.35+) or 'Ubuntu2404' explicitly"
+  type        = string
+  default     = "Ubuntu"
+}
+
+variable "host_encryption_enabled" {
+  description = "Enable host-based encryption for node pools (requires EncryptionAtHost feature enabled on subscription)"
+  type        = bool
+  default     = false
 }
 
 ###############################################################################

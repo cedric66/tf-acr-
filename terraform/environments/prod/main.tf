@@ -22,7 +22,7 @@ provider "azurerm" {
       prevent_deletion_if_contains_resources = false
     }
   }
-  subscription_id = "00000000-0000-0000-0000-000000000000"  # Update with your subscription ID
+  subscription_id = "00000000-0000-0000-0000-000000000000" # Update with your subscription ID
 }
 
 ###############################################################################
@@ -32,7 +32,7 @@ provider "azurerm" {
 locals {
   environment = "prod"
   location    = "australiaeast"
-  
+
   # Workspace-required tags
   tags = {
     environment = local.environment
@@ -48,20 +48,20 @@ locals {
 
 # Use existing resource group
 data "azurerm_resource_group" "main" {
-  name = "rg-xxxxxx"  # Update with your existing resource group name
+  name = "rg-xxxxxx" # Update with your existing resource group name
 }
 
 # Use existing virtual network
 data "azurerm_virtual_network" "main" {
-  name                = "vnet-xxxxxx"  # Update with your existing VNet name
-  resource_group_name = "rg-xxxxxx"    # Update with VNet's resource group
+  name                = "vnet-xxxxxx" # Update with your existing VNet name
+  resource_group_name = "rg-xxxxxx"   # Update with VNet's resource group
 }
 
 # Use existing subnet
 data "azurerm_subnet" "aks" {
-  name                 = "snet-xxxxxx"                    # Update with your existing subnet name
+  name                 = "snet-xxxxxx" # Update with your existing subnet name
   virtual_network_name = data.azurerm_virtual_network.main.name
-  resource_group_name  = "rg-xxxxxx"                      # Update with VNet's resource group
+  resource_group_name  = "rg-xxxxxx" # Update with VNet's resource group
 }
 
 ###############################################################################
@@ -87,7 +87,7 @@ module "aks" {
   cluster_name        = "aks-spot-${local.environment}"
   resource_group_name = data.azurerm_resource_group.main.name
   location            = data.azurerm_resource_group.main.location
-  kubernetes_version  = "1.28"
+  kubernetes_version  = "1.34"
   vnet_subnet_id      = data.azurerm_subnet.aks.id
   tags                = local.tags
 
@@ -122,14 +122,14 @@ module "aks" {
   spot_pool_configs = [
     # Spot Pool 1: General purpose, Zone 1
     {
-      name                = "spotgen1"
-      vm_size             = "Standard_D4s_v5"
-      min_count           = 0
-      max_count           = 25
-      zones               = ["1"]
-      spot_max_price      = -1  # Up to on-demand price
-      eviction_policy     = "Delete"
-      priority_weight     = 10
+      name            = "spotgen1"
+      vm_size         = "Standard_D4s_v5"
+      min_count       = 0
+      max_count       = 25
+      zones           = ["1"]
+      spot_max_price  = -1 # Up to on-demand price
+      eviction_policy = "Delete"
+      priority_weight = 10
       labels = {
         "spot-pool-id" = "1"
         "vm-family"    = "general"
@@ -137,14 +137,14 @@ module "aks" {
     },
     # Spot Pool 2: General purpose (larger), Zone 2
     {
-      name                = "spotgen2"
-      vm_size             = "Standard_D8s_v5"
-      min_count           = 0
-      max_count           = 15
-      zones               = ["2"]
-      spot_max_price      = -1
-      eviction_policy     = "Delete"
-      priority_weight     = 10
+      name            = "spotgen2"
+      vm_size         = "Standard_D8s_v5"
+      min_count       = 0
+      max_count       = 15
+      zones           = ["2"]
+      spot_max_price  = -1
+      eviction_policy = "Delete"
+      priority_weight = 10
       labels = {
         "spot-pool-id" = "2"
         "vm-family"    = "general"
@@ -152,14 +152,14 @@ module "aks" {
     },
     # Spot Pool 3: Compute optimized, Zone 3
     {
-      name                = "spotcomp"
-      vm_size             = "Standard_F8s_v2"
-      min_count           = 0
-      max_count           = 10
-      zones               = ["3"]
-      spot_max_price      = -1
-      eviction_policy     = "Delete"
-      priority_weight     = 10
+      name            = "spotcomp"
+      vm_size         = "Standard_F8s_v2"
+      min_count       = 0
+      max_count       = 10
+      zones           = ["3"]
+      spot_max_price  = -1
+      eviction_policy = "Delete"
+      priority_weight = 10
       labels = {
         "spot-pool-id" = "3"
         "vm-family"    = "compute"

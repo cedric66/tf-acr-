@@ -18,12 +18,15 @@ resource "azurerm_kubernetes_cluster_node_pool" "standard" {
   max_count             = each.value.enable_auto_scaling ? each.value.max_count : null
   node_count            = each.value.enable_auto_scaling ? null : each.value.min_count
   zones                 = each.value.zones
-  os_disk_size_gb       = each.value.os_disk_size_gb
-  os_disk_type          = each.value.os_disk_type
-  max_pods              = each.value.max_pods
-  auto_scaling_enabled  = each.value.enable_auto_scaling
-  vnet_subnet_id        = var.vnet_subnet_id
-  mode                  = "User"
+  os_disk_size_gb          = each.value.os_disk_size_gb
+  os_disk_type             = each.value.os_disk_type
+  os_sku                   = var.os_sku
+  max_pods                 = each.value.max_pods
+  auto_scaling_enabled     = each.value.enable_auto_scaling
+  scale_down_mode          = "Delete"  # Release all resources on scale-down
+  host_encryption_enabled  = var.host_encryption_enabled
+  vnet_subnet_id           = var.vnet_subnet_id
+  mode                     = "User"
   
   # Standard pools have no taints - they accept all workloads
   node_labels = local.standard_pool_labels[each.key]
@@ -60,12 +63,15 @@ resource "azurerm_kubernetes_cluster_node_pool" "spot" {
   max_count             = each.value.enable_auto_scaling ? each.value.max_count : null
   node_count            = each.value.enable_auto_scaling ? null : each.value.min_count
   zones                 = each.value.zones
-  os_disk_size_gb       = each.value.os_disk_size_gb
-  os_disk_type          = each.value.os_disk_type
-  max_pods              = each.value.max_pods
-  auto_scaling_enabled  = each.value.enable_auto_scaling
-  vnet_subnet_id        = var.vnet_subnet_id
-  mode                  = "User"
+  os_disk_size_gb          = each.value.os_disk_size_gb
+  os_disk_type             = each.value.os_disk_type
+  os_sku                   = var.os_sku
+  max_pods                 = each.value.max_pods
+  auto_scaling_enabled     = each.value.enable_auto_scaling
+  scale_down_mode          = "Delete"  # Required for spot: releases all resources on eviction
+  host_encryption_enabled  = var.host_encryption_enabled
+  vnet_subnet_id           = var.vnet_subnet_id
+  mode                     = "User"
 
   # Spot-specific configuration
   priority        = "Spot"

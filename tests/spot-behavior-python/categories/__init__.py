@@ -1,0 +1,1 @@
+"""Spot behavior test categories."""

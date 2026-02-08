@@ -1,0 +1,54 @@
+# AKS Spot Test Orchestrator - Configuration File
+# Copy and customize as needed
+
+# Cluster connection settings
+cluster:
+  kubeconfig: ~/.kube/config
+  context: null  # Use current context
+  timeout_seconds: 300
+
+# Test suite configuration
+test_suites:
+  terratest:
+    enabled: true
+    timeout_minutes: 10
+    working_dir: ../
+    env_file: ../.env
+
+  bash:
+    enabled: true
+    timeout_minutes: 20
+    working_dir: ../spot-behavior
+    env_file: ../spot-behavior/.env
+
+  python:
+    enabled: true
+    timeout_minutes: 20
+    working_dir: ../spot-behavior-python
+    env_file: ../spot-behavior-python/.env
+    venv_path: venv
+
+# Auto-remediation settings
+remediation:
+  enabled: true
+
+  vmss_ghosts:
+    enabled: true
+    min_age_minutes: 5  # Only delete if stuck >5min
+
+  stuck_nodes:
+    enabled: true
+    min_age_minutes: 5  # Only delete if NotReady >5min
+
+# Monitoring settings
+monitoring:
+  eviction_rate:
+    enabled: true
+    poll_interval_seconds: 30
+
+# Report generation
+reports:
+  output_dir: ./reports
+  formats: [json, html, markdown]  # Generate all formats
+  retention_days: 30  # Auto-cleanup old reports (0 = never)
+  open_html_after_run: false  # Auto-open HTML in browser

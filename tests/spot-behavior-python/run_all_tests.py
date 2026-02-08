@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 """Entry point for AKS spot behavior tests (Python version).
 
+Setup:
+    1. Copy .env.example to .env
+    2. Edit .env with your cluster details (CLUSTER_NAME, RESOURCE_GROUP, NAMESPACE)
+    3. Load: export $(cat .env | xargs)
+    4. Run tests (see usage below)
+    See README.md for detailed setup instructions
+
 Usage:
     python run_all_tests.py                          # Run all tests
     python run_all_tests.py --category pod-dist      # Run one category

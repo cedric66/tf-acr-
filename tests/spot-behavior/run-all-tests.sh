@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 # run-all-tests.sh - Entry point for AKS spot behavior tests
 #
+# SETUP:
+#   1. Copy .env.example to .env
+#   2. Edit .env with your cluster details (CLUSTER_NAME, RESOURCE_GROUP, NAMESPACE)
+#   3. Load configuration: source .env OR export $(cat .env | xargs)
+#   4. Run tests (see usage below)
+#   See README.md for detailed setup instructions
+#
 # Usage:
 #   ./run-all-tests.sh                          # Run all tests
 #   ./run-all-tests.sh --category pod-dist      # Run one category

@@ -629,8 +629,10 @@ See [SRE_OPERATIONAL_RUNBOOK.md](SRE_OPERATIONAL_RUNBOOK.md) Runbook 5 for full 
 | Document | Purpose |
 |----------|---------|
 | [SPOT_EVICITION_SCENARIOS.md](SPOT_EVICITION_SCENARIOS.md) | Eviction scenarios, sticky fallback, VMSS ghost instances |
-| [SRE_OPERATIONAL_RUNBOOK.md](SRE_OPERATIONAL_RUNBOOK.md) | Incident response runbooks |
-| [DEVOPS_TEAM_GUIDE.md](DEVOPS_TEAM_GUIDE.md) | Application team migration guide |
+| [SRE_OPERATIONAL_RUNBOOK.md](SRE_OPERATIONAL_RUNBOOK.md) | Incident response runbooks (Runbooks 1-10) |
+| [TROUBLESHOOTING_GUIDE.md](TROUBLESHOOTING_GUIDE.md) | Symptom-first diagnostic reference |
+| [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) | Converting existing clusters to spot |
+| [DEVOPS_TEAM_GUIDE.md](DEVOPS_TEAM_GUIDE.md) | Application team spot configuration |
 | [AKS_SPOT_NODE_ARCHITECTURE.md](AKS_SPOT_NODE_ARCHITECTURE.md) | Core technical design |
 | [CHAOS_ENGINEERING_TESTS.md](CHAOS_ENGINEERING_TESTS.md) | Resilience validation scenarios |
 | [FINOPS_COST_ANALYSIS.md](FINOPS_COST_ANALYSIS.md) | Financial modeling and ROI |

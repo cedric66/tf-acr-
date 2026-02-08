@@ -361,8 +361,10 @@ After completing changes that affect scope, architecture, metrics, or roadmap:
 | `CONSOLIDATED_PROJECT_BRIEF.md` | Start here - single source of truth |
 | `docs/AKS_SPOT_NODE_ARCHITECTURE.md` | Core technical design |
 | `docs/SPOT_EVICITION_SCENARIOS.md` | Eviction scenarios, sticky fallback, and Descheduler solution |
-| `docs/SRE_OPERATIONAL_RUNBOOK.md` | Incident response procedures |
-| `docs/DEVOPS_TEAM_GUIDE.md` | Migration and deployment guide |
+| `docs/SRE_OPERATIONAL_RUNBOOK.md` | Incident response procedures (Runbooks 1-10) |
+| `docs/TROUBLESHOOTING_GUIDE.md` | Symptom-first diagnostic reference |
+| `docs/MIGRATION_GUIDE.md` | Converting existing clusters to spot (both audiences) |
+| `docs/DEVOPS_TEAM_GUIDE.md` | Application spot configuration templates |
 | `docs/CHAOS_ENGINEERING_TESTS.md` | Resilience validation scenarios (5 failure modes) |
 | `docs/FINOPS_COST_ANALYSIS.md` | Financial modeling and ROI |
 | `docs/SECURITY_ASSESSMENT.md` | Threat model and compliance |

@@ -462,6 +462,388 @@ watch "kubectl get pdb <pdb-name> -n <namespace>"
 
 ---
 
+### Runbook 7: Descheduler Not Rebalancing Pods to Spot
+
+**Alert:** `Spot nodes available but >50% of spot-eligible pods remain on standard nodes for >30 minutes`
+
+**Cause:** Descheduler missing, misconfigured, or blocked by PDBs
+
+**Impact:** Financial - pods stuck on expensive standard nodes despite spot capacity being available (sticky fallback)
+
+**Response Procedure:**
+
+```bash
+# Step 1: Check if Descheduler is running
+kubectl get pods -n kube-system -l app=descheduler
+kubectl get cronjob -n kube-system | grep descheduler
+
+# If no pods/cronjobs found:
+# Descheduler is NOT installed. See "Install Descheduler" below.
+
+# Step 2: Check Descheduler logs for errors
+kubectl logs -n kube-system -l app=descheduler --tail=100
+
+# Look for:
+# - "evicted pod" messages (working correctly)
+# - "pod can't be evicted" (PDB blocking)
+# - "no pods to evict" (policy misconfiguration)
+
+# Step 3: Verify Descheduler policy has correct strategy
+kubectl get configmap descheduler-policy -n kube-system -o yaml
+# Must contain:
+#   RemovePodsViolatingNodeAffinity:
+#     enabled: true
+#     params:
+#       nodeAffinityType:
+#         - "preferredDuringSchedulingIgnoredDuringExecution"
+
+# Step 4: Check if PDBs are blocking descheduler evictions
+kubectl get pdb -A
+# If ALLOWED = 0 for any PDB, descheduler cannot evict those pods
+# This is correct behavior - PDBs protect availability
+
+# Step 5: Verify pods have the correct node affinity preference
+kubectl get deployment <deployment> -o yaml | grep -A15 "nodeAffinity"
+# Must have preferredDuringSchedulingIgnoredDuringExecution
+# with weight 100 for spot nodes
+
+# Step 6: Verify spot nodes have capacity
+kubectl describe node <spot-node> | grep -A5 "Allocated resources"
+# If spot nodes are full, pods can't move there
+# Autoscaler should provision more spot nodes for pending pods
+
+# Step 7: Manual rebalance (if descheduler is broken)
+# Restart pods one at a time to let scheduler place them on spot
+kubectl rollout restart deployment/<deployment> -n <namespace>
+# WARNING: This causes brief disruption - use only if descheduler fix is delayed
+```
+
+**Install Descheduler (if missing):**
+
+```bash
+helm repo add descheduler https://kubernetes-sigs.github.io/descheduler/
+helm install descheduler descheduler/descheduler \
+  --namespace kube-system \
+  --set schedule="*/5 * * * *" \
+  --set deschedulerPolicy.strategies.RemovePodsViolatingNodeAffinity.enabled=true \
+  --set "deschedulerPolicy.strategies.RemovePodsViolatingNodeAffinity.params.nodeAffinityType[0]=preferredDuringSchedulingIgnoredDuringExecution"
+```
+
+**Expected Recovery:**
+- T+0m: Descheduler runs (every 5 minutes via CronJob)
+- T+0m: Identifies pods on standard nodes that prefer spot
+- T+0m: Evicts pods (respecting PDBs)
+- T+1m: Scheduler places evicted pods on available spot nodes
+- T+5m: Next descheduler cycle handles remaining pods
+
+**Escalation:** If descheduler is running but pods are not moving after 30 minutes, check for PDB deadlocks or insufficient spot capacity. Escalate to Platform Lead if pattern persists.
+
+---
+
+### Runbook 8: Zone or Regional Capacity Exhaustion
+
+**Alert:** `Multiple spot pools failing to provision` or `FailedScaleUp events across 2+ pools`
+
+**Cause:** Azure spot capacity unavailable in one or more availability zones, or region-wide shortage
+
+**Impact:** High - reduced spot capacity, increased cost as workloads shift to standard nodes
+
+**Response Procedure:**
+
+```bash
+# Step 1: Determine scope - single zone or regional event
+# Check which pools are failing
+kubectl logs -n kube-system -l app=cluster-autoscaler --tail=200 | \
+  grep -E "FailedScaleUp|CloudProviderError|Quota"
+
+# Check VMSS provisioning errors per pool
+NODE_RG=$(az aks show -g <resource-group> -n <cluster-name> \
+  --query nodeResourceGroup -o tsv)
+
+az vmss list -g $NODE_RG --query "[].{name:name, capacity:sku.capacity}" -o table
+
+# Step 2: Check Azure spot availability per zone
+# Zone 1 pools: spotgeneral1
+# Zone 2 pools: spotmemory1, spotgeneral2
+# Zone 3 pools: spotmemory2, spotcompute
+az vmss list-instances -g $NODE_RG -n <vmss-name> \
+  --query "[].{state:provisioningState, zone:zones[0]}" -o table
+
+# Step 3: Check Azure spot pricing and eviction rates
+# Azure Portal → Virtual Machines → Pricing → Spot tab
+# OR use the Azure Retail Prices API:
+curl -s "https://prices.azure.com/api/retail/prices?\$filter=serviceName eq 'Virtual Machines' and armRegionName eq 'australiaeast' and skuName eq 'D4s v5' and type eq 'Consumption'" | \
+  python3 -c "import sys,json; d=json.load(sys.stdin); print(json.dumps(d['Items'][:3], indent=2))"
+
+# Step 4: Assess impact on workloads
+kubectl get pods -A --field-selector=status.phase=Pending | wc -l
+kubectl get pods -A --field-selector=status.phase=Pending
+
+# Step 5: Decision tree based on scope
+```
+
+**Decision Tree:**
+
+```
+Capacity Exhaustion Detected
+├─ Single zone affected (1 pool failing)
+│  ├─ Priority Expander routes to other spot pools automatically
+│  ├─ No manual action needed unless pods pending >5 min
+│  └─ Monitor: kubectl get pods -A --field-selector=status.phase=Pending
+│
+├─ Multiple zones affected (2-4 pools failing)
+│  ├─ Standard pool should auto-scale via Priority Expander (tier 20)
+│  ├─ Verify standard pool is scaling:
+│  │  kubectl get nodes -l priority=on-demand
+│  ├─ If standard not scaling, manually scale:
+│  │  az aks nodepool scale -g <rg> -n <cluster> --name stdworkload --node-count <current+5>
+│  └─ Monitor cost impact - notify FinOps if >24h
+│
+└─ Full region exhaustion (all pools + standard failing)
+   ├─ RARE - indicates major Azure capacity event
+   ├─ Check Azure Status Page: https://status.azure.com
+   ├─ Consider cross-region failover if available
+   ├─ Open Azure support ticket (Severity A)
+   └─ Escalate to Platform Lead immediately
+```
+
+**Recovery Monitoring:**
+
+```bash
+# Watch for spot capacity returning
+watch -n 60 "kubectl get nodes -l kubernetes.azure.com/scalesetpriority=spot | wc -l"
+
+# Check autoscaler for successful scale-ups
+kubectl logs -n kube-system -l app=cluster-autoscaler --tail=20 | grep "ScaleUp"
+```
+
+**Post-Incident Actions:**
+- Review if VM SKU diversity is sufficient (consider adding more families)
+- Check if affected zones have chronic capacity issues
+- Consider adjusting `spot_max_price` if price-based evictions contributed
+- Update capacity planning docs with observed regional patterns
+
+**Escalation:** If all spot AND standard pools fail to provision for >10 minutes, this is a P1 - escalate immediately.
+
+---
+
+### Runbook 9: Autoscaler Stuck in Backoff
+
+**Alert:** `Pending pods >5 minutes with no scale-up activity` or `Autoscaler logs show backoff/retry messages`
+
+**Cause:** Cluster Autoscaler enters exponential backoff after failed scale-up attempts. Common after quota exceeded, VMSS provisioning failures, or transient Azure API errors.
+
+**Impact:** Pods remain pending, application degraded, no new capacity being provisioned
+
+**Response Procedure:**
+
+```bash
+# Step 1: Check autoscaler status ConfigMap for backoff state
+kubectl get configmap cluster-autoscaler-status -n kube-system -o yaml
+
+# Look for:
+# - ScaleUp: "Backoff" or "BackoffLimited"
+# - Health: check lastProbeTime and lastTransitionTime
+# - NodeGroups: check for "Backoff" entries per pool
+
+# Step 2: Check autoscaler logs for the root cause of backoff
+kubectl logs -n kube-system -l app=cluster-autoscaler --tail=200 | \
+  grep -E "(backoff|Backoff|retry|failed.*scale|QuotaExceeded|InsufficientCapacity)"
+
+# Common backoff triggers:
+# - "failed to increase node group size" → VMSS provisioning failed
+# - "QuotaExceeded" → VM quota hit in subscription
+# - "AllocationFailed" → No capacity in zone
+# - "context deadline exceeded" → Azure API timeout
+
+# Step 3: Check VM quota (common root cause)
+az vm list-usage --location australiaeast -o table | \
+  grep -E "(Name|DSv5|ESv5|FSv2)" | head -20
+
+# If "CurrentValue" is near "Limit", quota is the issue
+# Request increase: Azure Portal → Subscriptions → Usage + quotas
+
+# Step 4: Check VMSS health for the stuck pool
+NODE_RG=$(az aks show -g <resource-group> -n <cluster-name> \
+  --query nodeResourceGroup -o tsv)
+
+az vmss list -g $NODE_RG -o table
+az vmss list-instances -g $NODE_RG -n <stuck-vmss> \
+  --query "[].{name:name, state:provisioningState}" -o table
+
+# Step 5: Clear the backoff by resolving the root cause
+
+## If quota exceeded:
+# Request quota increase, then wait for backoff to expire
+# Backoff duration: starts at ~5min, doubles each failure, caps at ~30min
+
+## If VMSS provisioning stuck:
+# Delete stuck instances (see Runbook 5)
+az vmss delete-instances -g $NODE_RG -n <vmss-name> --instance-ids <id>
+
+## If Azure API errors (transient):
+# Wait for backoff to expire (check autoscaler logs for timer)
+# Autoscaler will retry automatically
+
+# Step 6: Force autoscaler to re-evaluate (nuclear option)
+# Restart the autoscaler pod to clear all backoff state
+kubectl rollout restart deployment cluster-autoscaler -n kube-system
+# WARNING: This causes a brief gap in autoscaling (30-60s)
+# Only use if backoff is blocking critical workloads
+
+# Step 7: Verify recovery
+kubectl logs -n kube-system -l app=cluster-autoscaler --tail=20 | grep "ScaleUp"
+kubectl get pods -A --field-selector=status.phase=Pending
+```
+
+**Backoff Timeline:**
+
+```
+Failure #1: 5 minute backoff for the failed node group
+Failure #2: 10 minute backoff
+Failure #3: 20 minute backoff
+Failure #4+: 30 minute backoff (maximum)
+```
+
+Note: Backoff is **per node group** (per pool). If `spotgeneral1` is in backoff, other pools can still scale up normally via Priority Expander fallback.
+
+**Automated Mitigations:**
+- Priority Expander automatically tries other pools when one is in backoff
+- `max_node_provisioning_time = 10m` prevents indefinite waits for stuck provisioning
+- Backoff expires automatically - autoscaler will retry
+
+**Escalation:** If all pools are in backoff simultaneously and pods pending >15 minutes, restart autoscaler (Step 6) and escalate to Platform Lead.
+
+---
+
+### Runbook 10: Node Pool Operations (Day-2)
+
+These are planned operational procedures, not incident response. Use these when making changes to node pool configuration.
+
+#### 10a: Adding a New Spot Pool
+
+**When:** Adding VM SKU diversity, expanding to new zone, increasing capacity
+
+```bash
+# Step 1: Add pool definition in Terraform
+# Edit: terraform/modules/aks-spot-optimized/node-pools.tf
+# Follow naming convention: spotXXXN (lowercase alpha, max 12 chars)
+# Example: spotmemory3, spotcompute2
+
+# Step 2: Update Priority Expander ConfigMap
+# Edit: terraform/modules/aks-spot-optimized/priority-expander.tf
+# Add the new pool regex to the appropriate priority tier:
+#   Priority 5: Memory-optimized (E-series) - lowest eviction risk
+#   Priority 10: General/compute (D/F-series)
+
+# Step 3: Plan and apply
+cd terraform/environments/prod
+terraform plan -out=tfplan
+# Review: Expect 1 new azurerm_kubernetes_cluster_node_pool resource
+# Review: Priority Expander ConfigMap should show new pool regex
+terraform apply tfplan
+
+# Step 4: Verify new pool joined cluster
+kubectl get nodes -l agentpool=<new-pool-name>
+
+# Step 5: Verify autoscaler recognizes new pool
+kubectl logs -n kube-system -l app=cluster-autoscaler --tail=50 | grep <new-pool-name>
+
+# Step 6: Verify Priority Expander includes new pool
+kubectl get configmap cluster-autoscaler-priority-expander -n kube-system -o yaml
+```
+
+#### 10b: Removing a Spot Pool
+
+**When:** Decommissioning VM SKU, consolidating pools, reducing complexity
+
+```bash
+# Step 1: Drain workloads from the pool
+# Cordon all nodes in the pool to prevent new scheduling
+kubectl cordon -l agentpool=<pool-name>
+
+# Drain pods gracefully (respects PDBs)
+for node in $(kubectl get nodes -l agentpool=<pool-name> -o name); do
+  kubectl drain $node --ignore-daemonsets --delete-emptydir-data --grace-period=60
+done
+
+# Step 2: Verify all pods rescheduled
+kubectl get pods -A -o wide | grep <pool-name>
+# Should return empty - all pods moved to other pools
+
+# Step 3: Remove from Terraform
+# Remove pool definition from node-pools.tf
+# Remove pool regex from priority-expander.tf
+
+# Step 4: Plan and apply
+cd terraform/environments/prod
+terraform plan -out=tfplan
+# Review: Expect 1 destroyed azurerm_kubernetes_cluster_node_pool
+# Review: Updated Priority Expander ConfigMap
+terraform apply tfplan
+
+# Step 5: Verify removal
+kubectl get nodes -l agentpool=<pool-name>
+# Should return: No resources found
+```
+
+**WARNING:** Never remove a pool without draining first. Terraform `destroy` on a node pool deletes the VMSS immediately, killing all pods without graceful shutdown.
+
+#### 10c: Resizing Pool Min/Max Node Count
+
+**When:** Adjusting capacity limits based on observed usage
+
+```bash
+# Step 1: Update min_count/max_count in Terraform variables
+# Edit: terraform/environments/prod/main.tf or terraform.tfvars
+
+# Step 2: Plan and apply
+cd terraform/environments/prod
+terraform plan -out=tfplan
+# Review: Expect in-place update to node pool resource
+terraform apply tfplan
+
+# Step 3: Verify autoscaler sees new limits
+kubectl get configmap cluster-autoscaler-status -n kube-system -o yaml | \
+  grep -A5 <pool-name>
+```
+
+**Guidelines:**
+- `min_count = 0` for spot pools (allows full scale-down when no spot capacity)
+- `min_count >= 2` for standard pool (always-on fallback)
+- `min_count = 3` for system pool (HA for control plane components)
+- `max_count` should allow 2x expected peak usage per pool
+
+#### 10d: Changing VM SKU for a Pool
+
+**When:** Optimizing for cost, switching to newer VM generation
+
+**IMPORTANT:** VM SKU cannot be changed in-place. You must create a new pool and remove the old one.
+
+```bash
+# Step 1: Create new pool with desired SKU (see 10a)
+# Use a new name (e.g., spotgeneral1 → spotgeneral1v2)
+
+# Step 2: Wait for new pool to be ready
+kubectl get nodes -l agentpool=<new-pool-name> -w
+
+# Step 3: Drain old pool (see 10b)
+
+# Step 4: Remove old pool from Terraform (see 10b)
+
+# Step 5: Optionally rename in next maintenance window
+# (Rename requires another create/drain/delete cycle)
+```
+
+**Pre-Change Checklist:**
+- [ ] Change planned during low-traffic window
+- [ ] Terraform plan reviewed by second engineer
+- [ ] Priority Expander ConfigMap updated
+- [ ] Monitoring dashboards show new pool
+- [ ] Rollback plan documented (re-add old pool definition)
+
+---
+
 ## Operational Workflows
 
 ### Daily Operations Checklist
@@ -699,6 +1081,8 @@ When handing off on-call rotation:
 
 ### Reference Links
 
+- [Troubleshooting Guide](TROUBLESHOOTING_GUIDE.md) - Symptom-first diagnostic reference
+- [Migration Guide](MIGRATION_GUIDE.md) - Converting existing clusters to spot
 - [AKS Documentation](https://docs.microsoft.com/en-us/azure/aks/)
 - [Spot VMs Best Practices](https://docs.microsoft.com/en-us/azure/virtual-machines/spot-vms)
 - [Cluster Autoscaler FAQ](https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md)

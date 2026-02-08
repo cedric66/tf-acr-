@@ -78,12 +78,26 @@ aks-spot-test monitor --interval 60
 1. **Deployed AKS cluster** with spot node pools
 2. **kubectl** configured to connect to the cluster
 3. **Azure CLI** authenticated (`az login`)
-4. **Configuration file:**
+4. **Python 3.8+** (for Python tests)
+   ```bash
+   python3 --version
+   ```
+5. **Configuration file:**
    ```bash
    cd tests/aks-spot-test-orchestrator
    cp .env.example .env
    # Edit .env with your cluster details
    ```
+
+## Python Test Environment
+
+The orchestrator automatically sets up the Python test environment:
+
+1. **Creates virtual environment** if it doesn't exist (`venv/`)
+2. **Installs dependencies** from `../spot-behavior-python/requirements.txt`
+3. **Runs pytest** within the isolated environment
+
+No manual venv setup is required—the orchestrator handles it automatically during test execution.
 
 ## Configuration
 
@@ -260,6 +274,62 @@ nano .env  # Edit with your cluster details
 ```
 
 The orchestrator loads this **single .env file** and passes configuration to all test suites.
+
+### Command Not Found After Installation
+
+**Symptom:** After `pip install -e .`, the package appears in `pip list` but running `aks-spot-test` shows "command not found"
+
+**Root Cause:** Bash command hash table cache. If you tried running `aks-spot-test` before installation, bash cached the "command not found" result and continues using it after installation.
+
+**Solutions:**
+
+1. **Clear bash command cache (fastest):**
+   ```bash
+   hash -r
+   aks-spot-test --version
+   ```
+
+2. **Open a new terminal:**
+   ```bash
+   # New terminal automatically clears the hash table
+   aks-spot-test --version
+   ```
+
+3. **Verify script exists:**
+   ```bash
+   ls -la ~/.local/bin/aks-spot-test
+   which aks-spot-test
+   ```
+
+4. **Test with absolute path:**
+   ```bash
+   ~/.local/bin/aks-spot-test --version
+   ```
+   If this works but `aks-spot-test` doesn't, it's definitely a hash cache issue (use solution 1 or 2).
+
+5. **Check PATH (if absolute path doesn't work):**
+   ```bash
+   echo $PATH | grep ~/.local/bin
+   ```
+   If `~/.local/bin` is missing, add it to your shell config:
+   ```bash
+   # For bash
+   echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+   source ~/.bashrc
+
+   # For zsh
+   echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+   source ~/.zshrc
+   ```
+
+6. **Reinstall (if script not created):**
+   ```bash
+   pip uninstall aks-spot-test -y
+   pip install -e .
+   ls -la ~/.local/bin/aks-spot-test
+   hash -r
+   aks-spot-test --version
+   ```
 
 ## Development
 

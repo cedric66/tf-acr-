@@ -12,20 +12,61 @@ def run_tests(working_dir: str, venv_path: str = "venv", timeout_minutes: int = 
     """Run Python pytest tests and return results.
 
     Environment variables are inherited from orchestrator's loaded .env file.
+    Automatically sets up venv and installs dependencies if needed.
     """
     results = []
     start_time = time.time()
 
-    # Check if venv exists and activate
-    venv_activate = os.path.join(working_dir, venv_path, "bin", "activate")
-    if os.path.exists(venv_activate):
-        # Use venv python
-        python_cmd = os.path.join(working_dir, venv_path, "bin", "python")
-        pytest_cmd = os.path.join(working_dir, venv_path, "bin", "pytest")
-    else:
-        # Use system python
-        python_cmd = "python3"
-        pytest_cmd = "pytest"
+    # Ensure venv exists and is properly configured
+    venv_root = os.path.join(working_dir, venv_path)
+    venv_activate = os.path.join(venv_root, "bin", "activate")
+    python_cmd = os.path.join(venv_root, "bin", "python")
+    pytest_cmd = os.path.join(venv_root, "bin", "pytest")
+
+    # Create venv if it doesn't exist
+    if not os.path.exists(venv_activate):
+        print(f"    Creating Python virtual environment at {venv_path}...")
+        result = run_command(
+            ["python3", "-m", "venv", venv_path],
+            cwd=working_dir,
+            timeout=300,
+            env=os.environ.copy()
+        )
+        if result.returncode != 0:
+            results.append(TestResult(
+                test_id="python-venv-setup",
+                name="Python Virtual Environment Setup",
+                category="setup",
+                framework="python",
+                status="FAIL",
+                duration_seconds=time.time() - start_time,
+                error_message=f"Failed to create venv: {result.stderr}"
+            ))
+            return results, False
+        print("    ✅ Virtual environment created")
+
+    # Install dependencies if requirements.txt exists
+    requirements_file = os.path.join(working_dir, "requirements.txt")
+    if os.path.exists(requirements_file):
+        print(f"    Installing dependencies from {requirements_file}...")
+        result = run_command(
+            [python_cmd, "-m", "pip", "install", "-q", "-r", "requirements.txt"],
+            cwd=working_dir,
+            timeout=600,
+            env=os.environ.copy()
+        )
+        if result.returncode != 0:
+            results.append(TestResult(
+                test_id="python-deps-install",
+                name="Python Dependencies Installation",
+                category="setup",
+                framework="python",
+                status="FAIL",
+                duration_seconds=time.time() - start_time,
+                error_message=f"Failed to install dependencies: {result.stderr}"
+            ))
+            return results, False
+        print("    ✅ Dependencies installed")
 
     # Run pytest with JSON report
     # Environment variables are automatically inherited from os.environ

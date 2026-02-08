@@ -1,0 +1,13 @@
+# AKS Spot Behavior Tests - Python Dependencies
+# See README.md for installation and usage instructions
+
+# Test Framework
+pytest>=7.4.0
+pytest-json-report>=1.5.0
+
+# Kubernetes Client Library
+kubernetes>=28.0.0
+
+# Azure SDK
+azure-mgmt-compute>=30.0.0
+azure-identity>=1.14.0

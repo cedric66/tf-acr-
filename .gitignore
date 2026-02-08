@@ -42,6 +42,17 @@ app.zip
 .idea/
 .vscode/
 
+# Test configuration files with secrets
+tests/.env
+tests/.env.local
+tests/spot-behavior/.env
+tests/spot-behavior/.env.*
+tests/spot-behavior-python/.env
+tests/spot-behavior-python/.env.*
+tests/spot-behavior-python/venv/
+tests/spot-behavior-manual/.env
+tests/spot-behavior-manual/.env.*
+
 # Spot behavior test results
 tests/spot-behavior/results/
 tests/spot-behavior-python/results/

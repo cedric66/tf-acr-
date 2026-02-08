@@ -5,13 +5,22 @@ import (
 	"fmt"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/gruntwork-io/terratest/modules/random"
 	"github.com/gruntwork-io/terratest/modules/terraform"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// deferredDestroy conditionally destroys Terraform resources based on test config.
+// Use this instead of defer terraform.Destroy(t, options) to respect TEST_SKIP_DESTROY flag.
+func deferredDestroy(t *testing.T, options *terraform.Options, config *TestConfig, resourceName string) {
+	if !config.SkipDestroy {
+		terraform.Destroy(t, options)
+	} else {
+		t.Logf("Skipping destroy for resources: %s (TEST_SKIP_DESTROY=true)", resourceName)
+	}
+}
 
 // TestAksSpotIntegration performs a full integration test by deploying
 // an AKS cluster with spot nodes to Azure.
@@ -30,27 +39,29 @@ func TestAksSpotIntegration(t *testing.T) {
 
 	t.Parallel()
 
+	// Load test configuration from environment or defaults
+	config := NewTestConfig()
+
 	// Generate unique names to avoid conflicts
 	uniqueID := random.UniqueId()
-	resourceGroupName := fmt.Sprintf("rg-terratest-%s", uniqueID)
-	clusterName := fmt.Sprintf("aks-test-%s", uniqueID)
-	location := "australiaeast"
+	resourceGroupName := fmt.Sprintf("%s-%s", config.ResourceGroupPrefix, uniqueID)
+	clusterName := fmt.Sprintf("%s-%s", config.ClusterNamePrefix, uniqueID)
 
-	// Terraform options for prod environment (modified for testing)
+	// Terraform options using centralized configuration
 	terraformOptions := &terraform.Options{
-		TerraformDir:    "../terraform/environments/prod",
-		TerraformBinary: "terraform",
+		TerraformDir:    config.TerraformDir,
+		TerraformBinary: config.TerraformBinary,
 
 		Vars: map[string]interface{}{
 			// Override with test-specific values
 			"resource_group_name": resourceGroupName,
 			"cluster_name":        clusterName,
-			"location":            location,
+			"location":            config.Location,
 		},
 
 		// Retry settings for flaky Azure operations
-		MaxRetries:         3,
-		TimeBetweenRetries: 5 * time.Second,
+		MaxRetries:         config.MaxRetries,
+		TimeBetweenRetries: config.RetryDelay,
 		RetryableTerraformErrors: map[string]string{
 			".*": "Azure transient error, retrying...",
 		},
@@ -58,8 +69,8 @@ func TestAksSpotIntegration(t *testing.T) {
 		NoColor: true,
 	}
 
-	// Ensure we clean up resources after test
-	defer terraform.Destroy(t, terraformOptions)
+	// Ensure we clean up resources after test (unless skip flag is set)
+	defer deferredDestroy(t, terraformOptions, config, resourceGroupName)
 
 	// Deploy the infrastructure
 	terraform.InitAndApply(t, terraformOptions)
@@ -84,20 +95,25 @@ func TestAksSpotNodePoolsCreated(t *testing.T) {
 
 	t.Parallel()
 
+	config := NewTestConfig()
 	uniqueID := random.UniqueId()
-	resourceGroupName := fmt.Sprintf("rg-terratest-spot-%s", uniqueID)
-	clusterName := fmt.Sprintf("aks-spot-%s", uniqueID)
+	resourceGroupName := fmt.Sprintf("%s-spot-%s", config.ResourceGroupPrefix, uniqueID)
+	clusterName := fmt.Sprintf("%s-spot-%s", config.ClusterNamePrefix, uniqueID)
 
 	terraformOptions := &terraform.Options{
-		TerraformDir: "../terraform/environments/prod",
+		TerraformDir:    config.TerraformDir,
+		TerraformBinary: config.TerraformBinary,
 		Vars: map[string]interface{}{
 			"resource_group_name": resourceGroupName,
 			"cluster_name":        clusterName,
+			"location":            config.Location,
 		},
-		NoColor: true,
+		MaxRetries:         config.MaxRetries,
+		TimeBetweenRetries: config.RetryDelay,
+		NoColor:            true,
 	}
 
-	defer terraform.Destroy(t, terraformOptions)
+	defer deferredDestroy(t, terraformOptions, config, resourceGroupName)
 	terraform.InitAndApply(t, terraformOptions)
 
 	// Get node pools summary from output
@@ -130,20 +146,25 @@ func TestAksSpotNodePoolAttributes(t *testing.T) {
 
 	t.Parallel()
 
+	config := NewTestConfig()
 	uniqueID := random.UniqueId()
-	resourceGroupName := fmt.Sprintf("rg-terratest-spot-attrs-%s", uniqueID)
-	clusterName := fmt.Sprintf("aks-spot-attrs-%s", uniqueID)
+	resourceGroupName := fmt.Sprintf("%s-spot-attrs-%s", config.ResourceGroupPrefix, uniqueID)
+	clusterName := fmt.Sprintf("%s-spot-attrs-%s", config.ClusterNamePrefix, uniqueID)
 
 	terraformOptions := &terraform.Options{
-		TerraformDir: "../terraform/environments/prod",
+		TerraformDir:    config.TerraformDir,
+		TerraformBinary: config.TerraformBinary,
 		Vars: map[string]interface{}{
 			"resource_group_name": resourceGroupName,
 			"cluster_name":        clusterName,
+			"location":            config.Location,
 		},
-		NoColor: true,
+		MaxRetries:         config.MaxRetries,
+		TimeBetweenRetries: config.RetryDelay,
+		NoColor:            true,
 	}
 
-	defer terraform.Destroy(t, terraformOptions)
+	defer deferredDestroy(t, terraformOptions, config, resourceGroupName)
 	terraform.InitAndApply(t, terraformOptions)
 
 	// Get spot node pools output as JSON
@@ -200,20 +221,25 @@ func TestAksAutoscalerProfile(t *testing.T) {
 
 	t.Parallel()
 
+	config := NewTestConfig()
 	uniqueID := random.UniqueId()
-	resourceGroupName := fmt.Sprintf("rg-terratest-autoscaler-%s", uniqueID)
-	clusterName := fmt.Sprintf("aks-autoscaler-%s", uniqueID)
+	resourceGroupName := fmt.Sprintf("%s-autoscaler-%s", config.ResourceGroupPrefix, uniqueID)
+	clusterName := fmt.Sprintf("%s-autoscaler-%s", config.ClusterNamePrefix, uniqueID)
 
 	terraformOptions := &terraform.Options{
-		TerraformDir: "../terraform/environments/prod",
+		TerraformDir:    config.TerraformDir,
+		TerraformBinary: config.TerraformBinary,
 		Vars: map[string]interface{}{
 			"resource_group_name": resourceGroupName,
 			"cluster_name":        clusterName,
+			"location":            config.Location,
 		},
-		NoColor: true,
+		MaxRetries:         config.MaxRetries,
+		TimeBetweenRetries: config.RetryDelay,
+		NoColor:            true,
 	}
 
-	defer terraform.Destroy(t, terraformOptions)
+	defer deferredDestroy(t, terraformOptions, config, resourceGroupName)
 	terraform.InitAndApply(t, terraformOptions)
 
 	// Get the priority expander configmap output
@@ -237,20 +263,25 @@ func TestAksNodePoolDiversity(t *testing.T) {
 
 	t.Parallel()
 
+	config := NewTestConfig()
 	uniqueID := random.UniqueId()
-	resourceGroupName := fmt.Sprintf("rg-terratest-diversity-%s", uniqueID)
-	clusterName := fmt.Sprintf("aks-diversity-%s", uniqueID)
+	resourceGroupName := fmt.Sprintf("%s-diversity-%s", config.ResourceGroupPrefix, uniqueID)
+	clusterName := fmt.Sprintf("%s-diversity-%s", config.ClusterNamePrefix, uniqueID)
 
 	terraformOptions := &terraform.Options{
-		TerraformDir: "../terraform/environments/prod",
+		TerraformDir:    config.TerraformDir,
+		TerraformBinary: config.TerraformBinary,
 		Vars: map[string]interface{}{
 			"resource_group_name": resourceGroupName,
 			"cluster_name":        clusterName,
+			"location":            config.Location,
 		},
-		NoColor: true,
+		MaxRetries:         config.MaxRetries,
+		TimeBetweenRetries: config.RetryDelay,
+		NoColor:            true,
 	}
 
-	defer terraform.Destroy(t, terraformOptions)
+	defer deferredDestroy(t, terraformOptions, config, resourceGroupName)
 	terraform.InitAndApply(t, terraformOptions)
 
 	// Get spot node pools output as JSON

@@ -1,8 +1,6 @@
 module tf-acr-tests
 
-go 1.21
-
-toolchain go1.24.3
+go 1.18
 
 require (
 	github.com/gruntwork-io/terratest v0.46.7

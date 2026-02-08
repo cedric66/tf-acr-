@@ -140,15 +140,13 @@ def test_vmss_004(config: TestConfig, writer: ResultWriter):
     vmss = VMSSHelper(config.resource_group, config.cluster_name)
     writer.start_test("VMSS-004", "Autoscale ranges match config", "vmss-node-pool")
 
-    expected_ranges = {
-        "system": {"min": 3, "max": 6},
-        "stdworkload": {"min": 2, "max": 10},
-        "spotgeneral1": {"min": 0, "max": 10},
-        "spotmemory1": {"min": 0, "max": 10},
-        "spotgeneral2": {"min": 0, "max": 10},
-        "spotcompute": {"min": 0, "max": 10},
-        "spotmemory2": {"min": 0, "max": 10},
-    }
+    # Build expected ranges dynamically from config
+    expected_ranges = {}
+    for pool in config.all_pools:
+        expected_ranges[pool] = {
+            "min": config.pool_min.get(pool, 0),
+            "max": config.pool_max.get(pool, 20),
+        }
 
     results = {}
     for pool, expected in expected_ranges.items():
@@ -192,15 +190,15 @@ def test_vmss_005(config: TestConfig, writer: ResultWriter):
     writer.start_test("VMSS-005", "Node labels match expected values", "vmss-node-pool")
 
     results = {}
-    expected_labels = {
-        "system": {"workload-type": "standard", "priority": "system"},
-        "stdworkload": {"workload-type": "standard", "priority": "on-demand"},
-        "spotgeneral1": {"workload-type": "spot", "priority": "spot"},
-        "spotmemory1": {"workload-type": "spot", "priority": "spot"},
-        "spotgeneral2": {"workload-type": "spot", "priority": "spot"},
-        "spotcompute": {"workload-type": "spot", "priority": "spot"},
-        "spotmemory2": {"workload-type": "spot", "priority": "spot"},
-    }
+    # Build expected labels dynamically based on pool type
+    expected_labels = {}
+    for pool in config.all_pools:
+        if pool == config.system_pool:
+            expected_labels[pool] = {"workload-type": "standard", "priority": "system"}
+        elif pool == config.standard_pool:
+            expected_labels[pool] = {"workload-type": "standard", "priority": "on-demand"}
+        elif pool in config.spot_pools:
+            expected_labels[pool] = {"workload-type": "spot", "priority": "spot"}
 
     for pool, expected in expected_labels.items():
         pool_nodes = nodes.get_pool_nodes(pool)

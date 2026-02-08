@@ -48,6 +48,13 @@ def test_dep_001(config: TestConfig, writer: ResultWriter):
     pods = PodHelper(kube, nodes)
     writer.start_test("DEP-001", "Frontend-backend connectivity after eviction", "cross-service")
 
+    # Verify required services are configured
+    required_services = ["web", "catalogue"]
+    for svc in required_services:
+        if svc not in config.all_services:
+            writer.skip_test(f"Required service '{svc}' not in config")
+            return
+
     spot_nodes = nodes.get_spot_nodes()
     if not spot_nodes:
         writer.skip_test("No spot nodes available")
@@ -118,7 +125,10 @@ def test_dep_002(config: TestConfig, writer: ResultWriter):
 
     # Find a spot node near database services (hosting pods that depend on DB)
     target = None
-    db_consumers = ["catalogue", "user", "cart"]
+    # Use DB consumer services from config (catalogue, user, cart if present)
+    db_consumers = [svc for svc in config.stateless_services if svc in ["catalogue", "user", "cart"]]
+    if not db_consumers:
+        db_consumers = config.stateless_services[:3]  # First 3 services as fallback
     for n in spot_nodes:
         node_name = n["metadata"]["name"]
         for svc in db_consumers:
@@ -142,7 +152,8 @@ def test_dep_002(config: TestConfig, writer: ResultWriter):
         time.sleep(30)
 
         # Verify database services are still running (they should be on non-spot nodes)
-        db_services = {"mongodb": 0, "mysql": 0, "redis": 0}
+        # Use database services from config (filter out rabbitmq as it's queue, not DB)
+        db_services = {svc: 0 for svc in config.stateful_services if svc != "rabbitmq"}
         for db_svc in db_services:
             count = pods.count_running_for_service(db_svc)
             db_services[db_svc] = count
@@ -170,6 +181,11 @@ def test_dep_003(config: TestConfig, writer: ResultWriter):
     pods = PodHelper(kube, nodes)
     writer.start_test("DEP-003", "Queue service resilience", "cross-service")
 
+    # Verify rabbitmq is configured
+    if "rabbitmq" not in config.all_services:
+        writer.skip_test("Required service 'rabbitmq' not in config")
+        return
+
     spot_nodes = nodes.get_spot_nodes()
     if not spot_nodes:
         writer.skip_test("No spot nodes available")
@@ -177,7 +193,10 @@ def test_dep_003(config: TestConfig, writer: ResultWriter):
 
     # Find spot node hosting dispatch or shipping (queue consumers)
     target = None
-    queue_consumers = ["dispatch", "shipping"]
+    # Use queue consumers from config (dispatch, shipping if present)
+    queue_consumers = [svc for svc in config.stateless_services if svc in ["dispatch", "shipping"]]
+    if not queue_consumers:
+        queue_consumers = config.stateless_services[-2:]  # Last 2 services as fallback
     target_svc = None
     for n in spot_nodes:
         node_name = n["metadata"]["name"]
@@ -234,6 +253,13 @@ def test_dep_004(config: TestConfig, writer: ResultWriter):
     nodes = NodeHelper(kube)
     pods = PodHelper(kube, nodes)
     writer.start_test("DEP-004", "Cart persistence across eviction", "cross-service")
+
+    # Verify required services are configured
+    required_services = ["cart", "redis"]
+    for svc in required_services:
+        if svc not in config.all_services:
+            writer.skip_test(f"Required service '{svc}' not in config")
+            return
 
     spot_nodes = nodes.get_spot_nodes()
     if not spot_nodes:

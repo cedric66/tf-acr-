@@ -48,11 +48,13 @@ def test_auto_001(config: TestConfig, writer: ResultWriter):
             found, True
         )
 
-    # Verify memory pools at priority 5
-    for pool in ["spotmemory1", "spotmemory2"]:
-        if pool in priorities_raw:
-            # Check it's associated with priority 5
-            writer.add_evidence(f"{pool}_in_configmap", True)
+    # Verify memory pools at priority 5 (dynamically from config)
+    for pool in config.spot_pools:
+        # Check if this pool has priority 5 (memory-optimized pools)
+        if config.pool_priority.get(pool, 10) == 5:
+            if pool in priorities_raw:
+                # Check it's associated with priority 5
+                writer.add_evidence(f"{pool}_in_configmap", True)
 
     # Verify standard at priority 20
     writer.assert_contains(

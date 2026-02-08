@@ -87,6 +87,28 @@ class TestConfig:
         "system": int(os.environ.get("POOL_PRIORITY_system", "30")),
     })
 
+    # ── Node count ranges (customize via .env file) ──────────────────
+    # Min/max nodes per pool. Override via: POOL_MIN_system="3" etc.
+    pool_min: Dict[str, int] = field(default_factory=lambda: {
+        "system": int(os.environ.get("POOL_MIN_system", "3")),
+        "stdworkload": int(os.environ.get("POOL_MIN_stdworkload", "2")),
+        "spotgeneral1": int(os.environ.get("POOL_MIN_spotgeneral1", "0")),
+        "spotmemory1": int(os.environ.get("POOL_MIN_spotmemory1", "0")),
+        "spotgeneral2": int(os.environ.get("POOL_MIN_spotgeneral2", "0")),
+        "spotcompute": int(os.environ.get("POOL_MIN_spotcompute", "0")),
+        "spotmemory2": int(os.environ.get("POOL_MIN_spotmemory2", "0")),
+    })
+
+    pool_max: Dict[str, int] = field(default_factory=lambda: {
+        "system": int(os.environ.get("POOL_MAX_system", "6")),
+        "stdworkload": int(os.environ.get("POOL_MAX_stdworkload", "15")),
+        "spotgeneral1": int(os.environ.get("POOL_MAX_spotgeneral1", "20")),
+        "spotmemory1": int(os.environ.get("POOL_MAX_spotmemory1", "15")),
+        "spotgeneral2": int(os.environ.get("POOL_MAX_spotgeneral2", "15")),
+        "spotcompute": int(os.environ.get("POOL_MAX_spotcompute", "10")),
+        "spotmemory2": int(os.environ.get("POOL_MAX_spotmemory2", "10")),
+    })
+
     # ── Robot-Shop services (customize via .env file) ────────────────
     # Override via: STATELESS_SERVICES="web,cart,catalogue" etc.
     stateless_services: List[str] = field(

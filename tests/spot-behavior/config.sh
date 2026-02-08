@@ -26,41 +26,99 @@ STANDARD_POOL="${STANDARD_POOL:-stdworkload}"
 IFS=',' read -ra SPOT_POOLS <<< "${SPOT_POOLS:-spotgeneral1,spotmemory1,spotgeneral2,spotcompute,spotmemory2}"
 ALL_SPOT_POOLS_CSV="${SPOT_POOLS:-spotgeneral1,spotmemory1,spotgeneral2,spotcompute,spotmemory2}"
 
-# ── VM SKU mapping ───────────────────────────────────────────────
-# Override via: POOL_VM_SIZE_system="Standard_D2s_v5" etc.
-declare -A POOL_VM_SIZE=(
-  [system]="${POOL_VM_SIZE_system:-Standard_D4s_v5}"
-  [stdworkload]="${POOL_VM_SIZE_stdworkload:-Standard_D4s_v5}"
-  [spotgeneral1]="${POOL_VM_SIZE_spotgeneral1:-Standard_D4s_v5}"
-  [spotmemory1]="${POOL_VM_SIZE_spotmemory1:-Standard_E4s_v5}"
-  [spotgeneral2]="${POOL_VM_SIZE_spotgeneral2:-Standard_D8s_v5}"
-  [spotcompute]="${POOL_VM_SIZE_spotcompute:-Standard_F8s_v2}"
-  [spotmemory2]="${POOL_VM_SIZE_spotmemory2:-Standard_E8s_v5}"
+# ── Default values for associative arrays ────────────────────────
+# These are used if specific pool config is not provided via env vars
+DEFAULT_VM_SIZE="Standard_D4s_v5"
+DEFAULT_ZONES="1,2,3"
+DEFAULT_PRIORITY="10"
+
+# Pool-specific defaults (can be overridden via POOL_VM_SIZE_poolname, etc.)
+declare -A DEFAULT_POOL_VM_SIZES=(
+  [system]="Standard_D4s_v5"
+  [stdworkload]="Standard_D4s_v5"
+  [spotgeneral1]="Standard_D4s_v5"
+  [spotmemory1]="Standard_E4s_v5"
+  [spotgeneral2]="Standard_D8s_v5"
+  [spotcompute]="Standard_F8s_v2"
+  [spotmemory2]="Standard_E8s_v5"
 )
 
-# ── Zone mapping ─────────────────────────────────────────────────
-# Override via: POOL_ZONES_system="1,2,3" etc.
-declare -A POOL_ZONES=(
-  [system]="${POOL_ZONES_system:-1,2,3}"
-  [stdworkload]="${POOL_ZONES_stdworkload:-1,2}"
-  [spotgeneral1]="${POOL_ZONES_spotgeneral1:-1}"
-  [spotmemory1]="${POOL_ZONES_spotmemory1:-2}"
-  [spotgeneral2]="${POOL_ZONES_spotgeneral2:-2}"
-  [spotcompute]="${POOL_ZONES_spotcompute:-3}"
-  [spotmemory2]="${POOL_ZONES_spotmemory2:-3}"
+declare -A DEFAULT_POOL_ZONES_MAP=(
+  [system]="1,2,3"
+  [stdworkload]="1,2"
+  [spotgeneral1]="1"
+  [spotmemory1]="2"
+  [spotgeneral2]="2"
+  [spotcompute]="3"
+  [spotmemory2]="3"
 )
 
-# ── Priority expander weights (lower = higher priority) ──────────
-# Override via: POOL_PRIORITY_system="30" etc.
-declare -A POOL_PRIORITY=(
-  [spotmemory1]="${POOL_PRIORITY_spotmemory1:-5}"
-  [spotmemory2]="${POOL_PRIORITY_spotmemory2:-5}"
-  [spotgeneral1]="${POOL_PRIORITY_spotgeneral1:-10}"
-  [spotgeneral2]="${POOL_PRIORITY_spotgeneral2:-10}"
-  [spotcompute]="${POOL_PRIORITY_spotcompute:-10}"
-  [stdworkload]="${POOL_PRIORITY_stdworkload:-20}"
-  [system]="${POOL_PRIORITY_system:-30}"
+declare -A DEFAULT_POOL_PRIORITIES=(
+  [system]="30"
+  [stdworkload]="20"
+  [spotgeneral1]="10"
+  [spotgeneral2]="10"
+  [spotcompute]="10"
+  [spotmemory1]="5"
+  [spotmemory2]="5"
 )
+
+# ── Build VM SKU mapping dynamically ─────────────────────────────
+# Builds POOL_VM_SIZE array from env vars or defaults
+declare -A POOL_VM_SIZE=()
+
+# System and standard pools
+POOL_VM_SIZE[$SYSTEM_POOL]="${POOL_VM_SIZE_system:-${DEFAULT_POOL_VM_SIZES[system]:-$DEFAULT_VM_SIZE}}"
+POOL_VM_SIZE[$STANDARD_POOL]="${POOL_VM_SIZE_stdworkload:-${DEFAULT_POOL_VM_SIZES[stdworkload]:-$DEFAULT_VM_SIZE}}"
+
+# Spot pools - dynamically from SPOT_POOLS array
+for pool in "${SPOT_POOLS[@]}"; do
+  # Check for env var POOL_VM_SIZE_poolname
+  var_name="POOL_VM_SIZE_${pool}"
+  # Use indirect expansion to get env var value, fall back to default for this pool, or generic default
+  POOL_VM_SIZE[$pool]="${!var_name:-${DEFAULT_POOL_VM_SIZES[$pool]:-$DEFAULT_VM_SIZE}}"
+done
+
+# ── Build Zone mapping dynamically ───────────────────────────────
+declare -A POOL_ZONES=()
+
+POOL_ZONES[$SYSTEM_POOL]="${POOL_ZONES_system:-${DEFAULT_POOL_ZONES_MAP[system]:-$DEFAULT_ZONES}}"
+POOL_ZONES[$STANDARD_POOL]="${POOL_ZONES_stdworkload:-${DEFAULT_POOL_ZONES_MAP[stdworkload]:-1,2}}"
+
+for pool in "${SPOT_POOLS[@]}"; do
+  var_name="POOL_ZONES_${pool}"
+  POOL_ZONES[$pool]="${!var_name:-${DEFAULT_POOL_ZONES_MAP[$pool]:-1}}"
+done
+
+# ── Build Priority mapping dynamically ───────────────────────────
+declare -A POOL_PRIORITY=()
+
+POOL_PRIORITY[$SYSTEM_POOL]="${POOL_PRIORITY_system:-${DEFAULT_POOL_PRIORITIES[system]:-30}}"
+POOL_PRIORITY[$STANDARD_POOL]="${POOL_PRIORITY_stdworkload:-${DEFAULT_POOL_PRIORITIES[stdworkload]:-20}}"
+
+for pool in "${SPOT_POOLS[@]}"; do
+  var_name="POOL_PRIORITY_${pool}"
+  POOL_PRIORITY[$pool]="${!var_name:-${DEFAULT_POOL_PRIORITIES[$pool]:-$DEFAULT_PRIORITY}}"
+done
+
+# ── Build min/max node counts dynamically ────────────────────────
+# Some tests (VMSS-004) expect POOL_MIN and POOL_MAX arrays
+declare -A POOL_MIN=()
+declare -A POOL_MAX=()
+
+# Defaults
+POOL_MIN[$SYSTEM_POOL]="${POOL_MIN_system:-3}"
+POOL_MAX[$SYSTEM_POOL]="${POOL_MAX_system:-6}"
+POOL_MIN[$STANDARD_POOL]="${POOL_MIN_stdworkload:-2}"
+POOL_MAX[$STANDARD_POOL]="${POOL_MAX_stdworkload:-15}"
+
+# Spot pools default: min=0 (can scale to zero), max=20
+for pool in "${SPOT_POOLS[@]}"; do
+  var_name_min="POOL_MIN_${pool}"
+  var_name_max="POOL_MAX_${pool}"
+  POOL_MIN[$pool]="${!var_name_min:-0}"
+  POOL_MAX[$pool]="${!var_name_max:-20}"
+done
 
 # ── Robot-Shop services ──────────────────────────────────────────
 # Override via: STATELESS_SERVICES="web,cart,catalogue" etc.

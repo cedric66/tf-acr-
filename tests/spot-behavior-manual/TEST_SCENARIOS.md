@@ -2,6 +2,14 @@
 
 Manual test specification for validating AKS Spot VM behavior with Robot-Shop workload.
 
+> **📖 See [README.md](README.md) for setup instructions and how to run these tests.**
+>
+> **⚙️ Configuration**: The values below are **reference examples**. Replace with your actual cluster details:
+> 1. Copy `.env.example` to `.env`
+> 2. Edit with your cluster name, resource group, and namespace
+> 3. Load: `source .env`
+> 4. Use `$CLUSTER_NAME`, `$RESOURCE_GROUP`, `$NAMESPACE` in commands instead of hardcoded values
+
 ## Environment
 
 | Setting | Value |

@@ -109,8 +109,28 @@ else
 fi
 echo ""
 
-# Check 4: Executable permissions
-echo "━━━ Check 4: Executable Permissions ━━━"
+# Check 4: Line endings (CRLF vs LF)
+echo "━━━ Check 4: Line Endings ━━━"
+CRLF_FILES=()
+while IFS= read -r script; do
+  if file "$script" | grep -q "CRLF"; then
+    CRLF_FILES+=("$script")
+    ERRORS=$((ERRORS + 1))
+  fi
+done <<< "$SCRIPTS"
+
+if [[ ${#CRLF_FILES[@]} -eq 0 ]]; then
+  echo -e "${GREEN}✓${NC} All scripts use Unix line endings (LF)"
+else
+  echo -e "${RED}✗${NC} Scripts with Windows line endings (CRLF):"
+  for script in "${CRLF_FILES[@]}"; do
+    echo "  $script (fix with: dos2unix $script)"
+  done
+fi
+echo ""
+
+# Check 5: Executable permissions
+echo "━━━ Check 5: Executable Permissions ━━━"
 NON_EXECUTABLE=()
 while IFS= read -r script; do
   if [[ ! -x "$script" ]]; then

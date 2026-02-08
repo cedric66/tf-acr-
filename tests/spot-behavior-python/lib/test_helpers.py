@@ -184,7 +184,14 @@ class PodHelper:
 class VMSSHelper:
     """Azure VMSS inspection via az CLI."""
 
-    def __init__(self, resource_group: str, cluster_name: str, location: str = "eastus"):
+    def __init__(self, resource_group: str, cluster_name: str, location: str):
+        """Initialize VMSSHelper.
+
+        Args:
+            resource_group: AKS resource group name
+            cluster_name: AKS cluster name
+            location: Azure region (REQUIRED - must match cluster location)
+        """
         self.mc_rg = f"MC_{resource_group}_{cluster_name}_{location}"
 
     def run_az(self, args: List[str], timeout: int = 30) -> Any:

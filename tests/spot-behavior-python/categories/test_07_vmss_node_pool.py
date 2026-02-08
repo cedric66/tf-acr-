@@ -18,7 +18,7 @@ from lib.result_writer import ResultWriter
 def test_vmss_001(config: TestConfig, writer: ResultWriter):
     """Spot pool VMSS config: priority=Spot, evictionPolicy=Delete, maxPrice=-1."""
     kube = KubeCommand(config.namespace)
-    vmss = VMSSHelper(config.resource_group, config.cluster_name)
+    vmss = VMSSHelper(config.resource_group, config.cluster_name, config.location)
     writer.start_test("VMSS-001", "Spot pool VMSS config", "vmss-node-pool")
 
     results = {}
@@ -65,7 +65,7 @@ test_vmss_001.test_id = "VMSS-001"
 def test_vmss_002(config: TestConfig, writer: ResultWriter):
     """VMSS zone alignment matches expected config."""
     kube = KubeCommand(config.namespace)
-    vmss = VMSSHelper(config.resource_group, config.cluster_name)
+    vmss = VMSSHelper(config.resource_group, config.cluster_name, config.location)
     writer.start_test("VMSS-002", "Zone alignment matches config", "vmss-node-pool")
 
     results = {}
@@ -101,7 +101,7 @@ test_vmss_002.test_id = "VMSS-002"
 def test_vmss_003(config: TestConfig, writer: ResultWriter):
     """VM SKU matches pool_vm_size config."""
     kube = KubeCommand(config.namespace)
-    vmss = VMSSHelper(config.resource_group, config.cluster_name)
+    vmss = VMSSHelper(config.resource_group, config.cluster_name, config.location)
     writer.start_test("VMSS-003", "VM SKU matches pool config", "vmss-node-pool")
 
     results = {}
@@ -135,9 +135,15 @@ test_vmss_003.test_id = "VMSS-003"
 
 
 def test_vmss_004(config: TestConfig, writer: ResultWriter):
-    """Autoscale ranges match config (via az aks nodepool show)."""
+    """Autoscale ranges match config (via az aks nodepool show).
+
+    IMPORTANT: This test validates that the DEPLOYED cluster matches your .env config.
+    If you deployed with Terraform using custom min/max values, you MUST set matching
+    env vars in .env (e.g., POOL_MIN_spotgeneral1=0, POOL_MAX_spotgeneral1=20).
+    Test failures here mean config mismatch, NOT deployment issues.
+    """
     kube = KubeCommand(config.namespace)
-    vmss = VMSSHelper(config.resource_group, config.cluster_name)
+    vmss = VMSSHelper(config.resource_group, config.cluster_name, config.location)
     writer.start_test("VMSS-004", "Autoscale ranges match config", "vmss-node-pool")
 
     # Build expected ranges dynamically from config

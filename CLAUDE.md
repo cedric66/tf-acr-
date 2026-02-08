@@ -85,6 +85,79 @@ kubectl apply -f spot-deployment.yaml
 kind delete cluster --name spot-sim
 ```
 
+## Test Suites Overview
+
+Three test frameworks available - choose based on your workflow:
+
+| Framework | Language | Purpose | Location | Tests |
+|-----------|----------|---------|----------|-------|
+| Terratest | Go | Infrastructure validation | `tests/` | 6 |
+| Spot Behavior | Bash | Runtime behavior | `tests/spot-behavior/` | 50+ |
+| Spot Behavior | Python/pytest | Runtime behavior | `tests/spot-behavior-python/` | 50+ |
+
+### Running Terratest (Infrastructure Validation)
+
+```bash
+cd tests
+cp .env.example .env        # Edit: CLUSTER_NAME, RESOURCE_GROUP, LOCATION
+export $(cat .env | xargs)
+./run-tests.sh              # All tests
+```
+
+### Running Bash Spot Tests (50+ Runtime Tests)
+
+```bash
+cd tests/spot-behavior
+cp .env.example .env        # Edit: CLUSTER_NAME, RESOURCE_GROUP, NAMESPACE
+source .env
+./run-all-tests.sh          # All categories
+./run-all-tests.sh --category pod-distribution  # One category
+./run-all-tests.sh --test DIST-001              # Single test
+```
+
+### Running Python Spot Tests (Pytest Framework)
+
+```bash
+cd tests/spot-behavior-python
+cp .env.example .env
+python3 -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+export $(cat .env | xargs)
+pytest -v
+```
+
+### Validate Scripts Before Commit
+
+```bash
+cd tests
+./validate-scripts.sh       # Check bash syntax, line endings, shebangs
+```
+
+**Configuration:** All test suites require `.env` setup. See `tests/TEST_CONFIGURATION_GUIDE.md`.
+
+## Terraform Deployment
+
+### Deploy Production Environment
+
+```bash
+cd terraform/environments/prod
+cp terraform.tfvars.example terraform.tfvars  # Edit with your Azure details
+terraform init
+terraform plan -out=tfplan
+terraform apply tfplan
+```
+
+### Use Module Directly (Custom Environment)
+
+```bash
+cd terraform/modules/aks-spot-optimized
+terraform init
+terraform plan -var-file=custom.tfvars
+terraform apply
+```
+
+**WARNING:** Never commit `terraform.tfvars` or `.env` files (contain secrets).
+
 ## Core Terraform Module: `aks-spot-optimized`
 
 **Location:** `terraform/modules/aks-spot-optimized/`
@@ -241,6 +314,25 @@ vm-family        = "general" | "compute" | "memory"
 ### Test Naming
 
 Go test functions follow: `TestModuleName_WhatItTests` (e.g., `TestAksSpotModuleValidation`)
+
+### Shell Script Standards
+
+All bash scripts must follow these conventions (enforced by `tests/validate-scripts.sh`):
+
+```bash
+#!/usr/bin/env bash
+# script-name.sh - Description
+
+set -euo pipefail  # REQUIRED: fail on error, undefined vars, pipe failures
+
+# Script content...
+```
+
+**Requirements:**
+- Shebang: `#!/usr/bin/env bash` (NOT `#!/bin/bash`)
+- Safety: `set -euo pipefail` after header comments
+- Line endings: Unix LF only (CRLF breaks scripts)
+- Validation: Run `tests/validate-scripts.sh` before commit
 
 ## Agent Workflows
 

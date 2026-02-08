@@ -103,7 +103,7 @@ def _build_pool_dict_list(pool_names: List[str], env_prefix: str,
         env_var = f"{env_prefix}_{pool}"
         pool_default = ",".join(defaults.get(pool, [generic_default]))
         value = os.environ.get(env_var, pool_default)
-        result[pool] = value.split(",") if value else []
+        result[pool] = [item.strip() for item in value.split(",")] if value else []
     return result
 
 
@@ -140,10 +140,12 @@ class TestConfig:
         default_factory=lambda: os.environ.get("STANDARD_POOL", "stdworkload")
     )
     spot_pools: List[str] = field(
-        default_factory=lambda: os.environ.get(
-            "SPOT_POOLS",
-            "spotgeneral1,spotmemory1,spotgeneral2,spotcompute,spotmemory2"
-        ).split(",")
+        default_factory=lambda: [
+            pool.strip() for pool in os.environ.get(
+                "SPOT_POOLS",
+                "spotgeneral1,spotmemory1,spotgeneral2,spotcompute,spotmemory2"
+            ).split(",")
+        ]
     )
 
     # ── Dynamically built dictionaries (built in __post_init__) ──────
@@ -157,22 +159,28 @@ class TestConfig:
     # ── Robot-Shop services (customize via .env file) ────────────────
     # Override via: STATELESS_SERVICES="web,cart,catalogue" etc.
     stateless_services: List[str] = field(
-        default_factory=lambda: os.environ.get(
-            "STATELESS_SERVICES",
-            "web,cart,catalogue,user,payment,shipping,ratings,dispatch"
-        ).split(",")
+        default_factory=lambda: [
+            svc.strip() for svc in os.environ.get(
+                "STATELESS_SERVICES",
+                "web,cart,catalogue,user,payment,shipping,ratings,dispatch"
+            ).split(",")
+        ]
     )
     stateful_services: List[str] = field(
-        default_factory=lambda: os.environ.get(
-            "STATEFUL_SERVICES",
-            "mongodb,mysql,redis,rabbitmq"
-        ).split(",")
+        default_factory=lambda: [
+            svc.strip() for svc in os.environ.get(
+                "STATEFUL_SERVICES",
+                "mongodb,mysql,redis,rabbitmq"
+            ).split(",")
+        ]
     )
     pdb_services: List[str] = field(
-        default_factory=lambda: os.environ.get(
-            "PDB_SERVICES",
-            "web,cart,catalogue,mongodb,mysql,redis,rabbitmq"
-        ).split(",")
+        default_factory=lambda: [
+            svc.strip() for svc in os.environ.get(
+                "PDB_SERVICES",
+                "web,cart,catalogue,mongodb,mysql,redis,rabbitmq"
+            ).split(",")
+        ]
     )
 
     # ── Timeouts (seconds) (customize via .env file) ─────────────────

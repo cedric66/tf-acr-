@@ -71,7 +71,7 @@ test_auto_001.test_id = "AUTO-001"
 def test_auto_002(config: TestConfig, writer: ResultWriter):
     """Autoscaler profile settings match expected values."""
     kube = KubeCommand(config.namespace)
-    vmss = VMSSHelper(config.resource_group, config.cluster_name)
+    vmss = VMSSHelper(config.resource_group, config.cluster_name, config.location)
     writer.start_test("AUTO-002", "Autoscaler profile settings", "autoscaler")
 
     # Get cluster autoscaler profile via az CLI
@@ -217,7 +217,7 @@ def test_auto_004(config: TestConfig, writer: ResultWriter):
     """Scale-down on underutilization (verify setting, not actual scale-down)."""
     kube = KubeCommand(config.namespace)
     nodes = NodeHelper(kube)
-    vmss = VMSSHelper(config.resource_group, config.cluster_name)
+    vmss = VMSSHelper(config.resource_group, config.cluster_name, config.location)
     writer.start_test("AUTO-004", "Scale-down underutilization config", "autoscaler")
 
     # Verify scale-down settings via az CLI
@@ -266,7 +266,7 @@ test_auto_004.test_id = "AUTO-004"
 def test_auto_005(config: TestConfig, writer: ResultWriter):
     """balance_similar_node_groups=true."""
     kube = KubeCommand(config.namespace)
-    vmss = VMSSHelper(config.resource_group, config.cluster_name)
+    vmss = VMSSHelper(config.resource_group, config.cluster_name, config.location)
     writer.start_test("AUTO-005", "Balance similar node groups enabled", "autoscaler")
 
     cluster_info = vmss.run_az([

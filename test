@@ -1,0 +1,20 @@
+Chainguard: The "Premium Assurance" Model
+Pricing: High. Chainguard targets the "Fortune 500" and "Cloud Native Unicorn" segment. Their "Catalog" pricing allows unlimited use of all images for a flat fee (often scaled by engineering team size), but "Per Image" pricing can be expensive ($5k-$15k/year/image ranges have been rumored in forums).
+
+Value Driver: You pay for the SLA and the outsourcing of liability. When a CISO buys Chainguard, they are paying to never have to explain a container vulnerability to the board again. It is an insurance policy against supply chain attacks.   
+
+5.4.2 Minimus: The "Regulated Enterprise" Model
+Pricing: Flexible, but enterprise-focused. Likely structured around "seats" or "application counts."
+
+Value Driver: Compliance Velocity. Minimus is cheaper than hiring a team of FedRAMP consultants. The value is in the "air-gap" support and the ability to pass a government audit (ATO) faster. The connection to the Twistlock founders implies a "security platform" sell rather than just "image registry" sell.
+
+5.4.3 Docker: The "Freemium / Utility" Model
+Pricing:
+
+Free: 1,000+ hardened images. This sets a "price floor" of $0 for basic hardening.
+
+Enterprise: Part of "Docker Business" subscriptions or separate DHI add-ons ($24/user/month range for Business).
+
+ELS: Paid add-on for legacy support.
+
+Value Driver: Scale and ELS. Docker captures the 90% of the market that won't pay $10k for a Python image. They monetize the "tail" of legacy apps (ELS) and the corporate governance features (SSO, Scout Policy).

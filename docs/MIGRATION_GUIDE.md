@@ -2,7 +2,7 @@
 
 **Audience:** Cloud Operations (Infrastructure) and Application/Workload Teams
 **Purpose:** Step-by-step guide to safely add spot node pools to an existing AKS cluster and migrate workloads
-**Last Updated:** 2026-02-08
+**Last Updated:** 2026-02-10
 
 > **This guide is for existing clusters.** If you are deploying a new cluster from scratch, see [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md).
 
@@ -12,6 +12,9 @@
 
 1. [Overview](#1-overview)
 2. [Pre-Migration Assessment](#2-pre-migration-assessment) (Cloud Ops)
+   - 2.6 [Choosing the Right Number of Spot Pools](#26-choosing-the-right-number-of-spot-pools)
+   - 2.7 [Sizing Nodes Per Pool](#27-sizing-nodes-per-pool)
+   - 2.8 [Configurable SKU Selection](#28-configurable-sku-selection)
 3. [Phase 1: Infrastructure Preparation](#3-phase-1-infrastructure-preparation) (Cloud Ops)
 4. [Phase 2: Workload Audit](#4-phase-2-workload-audit) (App Teams + Cloud Ops)
 5. [Phase 3: Pilot Migration](#5-phase-3-pilot-migration) (Both)
@@ -93,7 +96,12 @@ az aks show -g $RESOURCE_GROUP -n $CLUSTER_NAME \
 
 ### 2.2 Azure Quota and Capacity Check
 
+> **Note:** For configurable SKU selection, see [Section 2.8: Configurable SKU Selection](#28-configurable-sku-selection).
+
 ```bash
+# First, create or source your config.sh (see Section 2.8)
+source ./config.sh
+
 LOCATION=$(az aks show -g $RESOURCE_GROUP -n $CLUSTER_NAME --query location -o tsv)
 
 # Check VM quota for target VM families
@@ -101,22 +109,22 @@ echo "=== VM Quota Check ==="
 az vm list-usage --location $LOCATION -o table | \
   grep -E "(Name|DSv5|ESv5|FSv2)"
 
-# Check spot availability per SKU
+# Check spot availability per configured SKU
 echo "=== Spot SKU Availability ==="
-for SKU in Standard_D4s_v5 Standard_D8s_v5 Standard_E4s_v5 Standard_E8s_v5 Standard_F8s_v2; do
-  AVAIL=$(az vm list-skus --location $LOCATION --size $SKU \
-    --query "[0].restrictions" -o tsv 2>/dev/null)
-  if [ -z "$AVAIL" ] || [ "$AVAIL" = "None" ]; then
+for SKU in "${SPOT_SKUS[@]}"; do
+  RESTRICTIONS=$(az vm list-skus --location "$LOCATION" --resource-type virtualMachines \
+    --query "[?name=='${SKU}'].restrictions | [0]" -o json 2>/dev/null || echo '[]')
+  if [ "$RESTRICTIONS" = "[]" ] || [ "$RESTRICTIONS" = "null" ]; then
     echo "  ✅ $SKU: Available"
   else
-    echo "  ❌ $SKU: Restricted - $AVAIL"
+    echo "  ❌ $SKU: Restricted - $(echo "$RESTRICTIONS" | jq -r '.[].reasonCode' // 'Unknown')"
   fi
 done
 
-# Check available zones
-echo "=== Zone Availability ==="
-az vm list-skus --location $LOCATION --size Standard_D4s_v5 \
-  --query "[0].locationInfo[0].zones" -o tsv
+# Check available zones for first spot pool
+echo "=== Zone Availability (for ${POOL_VM_SIZE_spotgeneral1}) ==="
+az vm list-skus --location "$LOCATION" --resource-type virtualMachines \
+  --query "[?name=='${POOL_VM_SIZE_spotgeneral1}'].locationInfo[0].zones | [0]" -o tsv
 ```
 
 **Quota Planning:**
@@ -199,6 +207,10 @@ terraform plan
 **Option B2: Add spot pools via Azure CLI only (faster, no Terraform)**
 
 ```bash
+# First, create config.sh with your SKU preferences (see Section 2.8)
+# Then source it before running commands
+source ./config.sh
+
 # Add a spot pool directly via CLI
 az aks nodepool add \
   --resource-group $RESOURCE_GROUP \
@@ -211,8 +223,8 @@ az aks nodepool add \
   --min-count 0 \
   --max-count 20 \
   --enable-cluster-autoscaler \
-  --node-vm-size Standard_D4s_v5 \
-  --zones 1 \
+  --node-vm-size "${POOL_VM_SIZE_spotgeneral1:-Standard_D4s_v5}" \
+  --zones "${POOL_ZONES_spotgeneral1:-1}" \
   --labels "workload-type=spot" "vm-family=general" "cost-optimization=spot-enabled" \
   --node-taints "kubernetes.azure.com/scalesetpriority=spot:NoSchedule" \
   --no-wait
@@ -230,6 +242,329 @@ az aks nodepool add \
 - [ ] Terraform state aligned (if using Terraform)
 - [ ] Maintenance window scheduled for autoscaler profile change
 - [ ] Stakeholders notified (app teams, SRE, management)
+
+### 2.6 Choosing the Right Number of Spot Pools
+
+> **Best Practice Sources:**
+> - Azure: [Add an Azure Spot node pool to AKS](https://learn.microsoft.com/en-us/azure/aks/spot-node-pool)
+> - Azure: [Scaling Safely with Spot on AKS (July 2025)](https://blog.aks.azure.com/2025/07/17/Scaling-safely-with-spot-on-aks)
+> - AWS: [Best practices for EC2 Spot with EKS](https://repost.aws/knowledge-center/eks-spot-instance-best-practices)
+
+#### Decision Framework
+
+Both Azure and AWS recommend **multiple spot pools with different VM sizes** to reduce correlated eviction risk. The optimal number depends on your cluster size and availability requirements.
+
+| Factor | 3 Pools | 5 Pools (Recommended) | 7+ Pools |
+|--------|---------|----------------------|----------|
+| **Cluster Size** | < 50 nodes | 50-200 nodes | > 200 nodes |
+| **Workload Diversity** | Single workload type | Mixed workloads | Highly varied |
+| **Cost Savings Target** | 40-50% | 50-70% | Marginal gains |
+| **Operational Complexity** | Low | Medium | High |
+| **Correlated Eviction Risk** | ~2-4% | ~0.3-0.8% | <0.5% |
+| **VM Families** | D + E series | D + E + F series | Add Arm64, N-series |
+
+#### Pool Count Decision Tree
+
+```
+START
+  │
+  ├─ Can you tolerate ~2-4% simultaneous eviction risk?
+  │   ├─ YES → 3 pools (minimum viable diversification)
+  │   └─ NO → Continue
+  │
+  ├─ Do you have 50+ nodes or mixed workload types?
+  │   ├─ YES → 5 pools (recommended sweet spot)
+  │   └─ NO → 3 pools
+  │
+  └─ Do you have >200 nodes or extreme availability requirements?
+      ├─ YES → 7+ pools (consider adding Arm64, N-series for GPU)
+      └─ NO → 5 pools
+```
+
+#### VM Family Selection Strategy
+
+Based on [Azure AKS Team Blog (July 2025)](https://blog.aks.azure.com/2025/07/17/Scaling-safely-with-spot-on-aks) and [EC2 Spot best practices](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/spot-best-practices.html):
+
+**Primary Families (x86) - Recommended for most deployments:**
+- **D-series (general)**: Standard_D4s_v5, Standard_D8s_v5 - Baseline workloads
+- **E-series (memory)**: Standard_E4s_v5, Standard_E8s_v5 - **Lower eviction risk** (historically)
+- **F-series (compute)**: Standard_F8s_v2 - Compute-intensive workloads
+
+**Secondary Families (for 7+ pools or specialized workloads):**
+- **Arm64**: D4ps_v5, D8ps_v5 - Architecture diversification
+- **N-series**: GPU workloads if applicable
+
+**Key Rule:** Each pool = 1 VM family + 1 Zone (maximum diversification)
+
+> **Why memory pools get priority:** Azure data shows E-series has the lowest historical eviction rates. Place them at priority tier 5 (highest preference) in your Priority Expander configuration.
+
+### 2.7 Sizing Nodes Per Pool
+
+> **Best Practice Sources:**
+> - Azure: [AKS Cost Best Practices](https://learn.microsoft.com/en-us/azure/aks/best-practices-cost)
+> - Azure: [AKS Capacity Planning](https://learn.microsoft.com/en-us/azure/aks/upgrade-capacity-cost-planning)
+> - AWS: [Best practices for Amazon EC2 Spot](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/spot-best-practices.html)
+
+Per-pool sizing should balance three competing goals:
+1. **Capacity headroom** for autoscaler during evictions
+2. **Quota efficiency** (don't over-provision unused quota)
+3. **Cost optimization** (maximize spot usage without over-buying)
+
+#### Step 1: Calculate Baseline Capacity
+
+**First, determine your total workload requirements:**
+
+```bash
+# Calculate total vCPU and memory requests across all namespaces
+kubectl get deployments -A -o json | jq -r '
+  .items[] |
+  select(.spec.template.spec.tolerations? // [] | any(.key == "kubernetes.azure.com/scalesetpriority")) |
+  {
+    name: .metadata.name,
+    namespace: .metadata.namespace,
+    replicas: .spec.replicas,
+    cpu: (.spec.template.spec.containers | map(.resources.requests.cpu // "0") | map tonumber | add),
+    memory: (.spec.template.spec.containers | map(.resources.requests.memory // "0") | add)
+  }
+' | jq -s '
+  map(.replicas *= .cpu) | add | "Total vCPU: \(.)",
+  map(.replicas *= .memory) | add | "Total memory: \(.)"
+'
+```
+
+| Metric | How to Calculate | Example |
+|--------|------------------|---------|
+| **Total vCPU needed** | Sum of all pod requests × replicas | 120 vCPUs |
+| **Total memory needed** | Sum of all pod memory requests × replicas | 240 GB |
+| **Peak buffer** | Add 20-30% for spikes | +36 vCPUs |
+| **Baseline requirement** | Total + buffer | **156 vCPUs** |
+
+#### Step 2: Apply the 50% Spot Target Rule
+
+**Industry best practice** from Azure and AWS guidance:
+
+| Target Spot % | Spot Capacity Required | Standard Fallback |
+|---------------|------------------------|-------------------|
+| **50%** (conservative) | 50% of baseline | 50% on-demand |
+| **70%** (recommended) | 70% of baseline | 30% on-demand |
+| **90%** (aggressive) | 90% of baseline | 10% on-demand |
+
+**For a 156 vCPU baseline with 70% spot target:**
+- Spot capacity needed: ~110 vCPUs
+- Standard fallback: ~46 vCPUs
+
+#### Step 3: Distribute Across Pools Using Priority Weights
+
+**Priority Tier Approach** (from your current architecture):
+
+| Priority | Pool Type | % of Spot Capacity | Example Allocation |
+|----------|-----------|-------------------|-------------------|
+| **5** | Memory-optimized (E-series) | 40% | 44 vCPUs → 11×E4s_v5 + 3×E8s_v5 |
+| **10** | General (D-series) | 40% | 44 vCPUs → 11×D4s_v5 + 2×D8s_v5 |
+| **10** | Compute (F-series) | 20% | 22 vCPUs → 3×F8s_v2 |
+
+#### Step 4: Set Min/Max Per Pool
+
+**Formula:** `max_count = ceil(pool_vcpus / vm_size_vcpus × 1.5)`
+
+The `1.5` multiplier provides:
+- Headroom for autoscaler reaction time (20s scan interval)
+- Buffer for regional capacity constraints
+- Room for workload growth
+
+**Example calculation for spotmemory1 (E4s_v5 = 4 vCPU):**
+```
+max_count = ceil(44 / 4 × 1.5) = ceil(16.5) = 17
+```
+
+| Pool | VM Size | vCPUs | Target Max | Formula Result | Recommended Max |
+|------|---------|-------|------------|----------------|-----------------|
+| spotmemory1 | E4s_v5 | 4 | 44 vCPUs | ceil(44/4 × 1.5) | **17** |
+| spotmemory2 | E8s_v5 | 8 | 44 vCPUs | ceil(44/8 × 1.5) | **9** |
+| spotgeneral1 | D4s_v5 | 4 | 44 vCPUs | ceil(44/4 × 1.5) | **17** |
+| spotgeneral2 | D8s_v5 | 8 | 22 vCPUs | ceil(22/8 × 1.5) | **5** |
+| spotcompute | F8s_v2 | 8 | 22 vCPUs | ceil(22/8 × 1.5) | **5** |
+
+**All pools: `min_count = 0`** (let autoscaler drive scale-up from zero)
+
+#### Step 5: Validate Against Quota
+
+```bash
+#!/usr/bin/env bash
+# validate-quota.sh - Check if quota supports your pool sizing
+
+LOCATION="${LOCATION:-australiaeast}"
+
+# Sum of max_count × vCPUs for all pools
+TOTAL_SPOT_VCPUS=$((
+  17*4 + 9*8 + 17*4 + 5*8 + 5*8
+))  # = 264 vCPUs max spot capacity
+
+echo "=== Quota Validation ==="
+echo "Max spot vCPUs needed: $TOTAL_SPOT_VCPUS"
+
+# Check current quota
+CURRENT_QUOTA=$(az vm list-usage --location $LOCATION \
+  --query "[?contains(name, 'TotalRegionalvCPUs')].currentValue" -o tsv)
+
+echo "Current vCPU quota: $CURRENT_QUOTA"
+
+if [ "$TOTAL_SPOT_VCPUS" -gt "$CURRENT_QUOTA" ]; then
+  echo "❌ INSUFFICIENT QUOTA - Request increase of $((TOTAL_SPOT_VCPUS - CURRENT_QUOTA)) vCPUs"
+else
+  echo "✅ Sufficient quota"
+fi
+```
+
+#### Step 6: Standard Pool Sizing (Fallback Capacity)
+
+**Rule:** Standard pool `max_count` = spot_max × (1 - spot_target%) / spot_target%
+
+For 70% spot target:
+```
+standard_max = spot_max × 0.3 / 0.7 = spot_max × 0.43
+```
+
+| Metric | Calculation | Result |
+|--------|-------------|--------|
+| Spot max capacity | 17×4 + 9×8 + 17×4 + 5×8 + 5×8 | 264 vCPUs |
+| Standard needed | 264 × 0.43 | **114 vCPUs** |
+| Std pool max count (D4s_v5) | ceil(114 / 4) | **29 nodes** |
+
+#### Quick Reference: Pool Sizing Cheat Sheet
+
+| Cluster Size | Spot Pools | Per-Pool Max Range | Standard Max |
+|--------------|------------|-------------------|--------------|
+| Small (<50 nodes) | 3 | 5-10 nodes | 10-15 |
+| Medium (50-200) | 5 | 10-20 nodes | 20-30 |
+| Large (>200) | 7+ | 15-30 nodes | 40-60 |
+
+**Adjustment factors:**
+- Multiply by **1.5×** for bursty workloads
+- Multiply by **0.7×** for steady-state/batch workloads
+- Add **+5 nodes** per pool if running in capacity-constrained regions
+
+### 2.8 Configurable SKU Selection
+
+> **Best Practice Sources:**
+> - Azure: [VMSS Instance Mix Overview](https://learn.microsoft.com/en-us/azure/virtual-machine-scale-sets/instance-mix-overview)
+> - Azure: [AKS Performance and Scaling Best Practices](https://learn.microsoft.com/en-us/azure/aks/best-practices-performance-scale)
+> - AWS: [EKS Managed Node Groups](https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html)
+
+#### Problem: Hardcoded Values Limit Portability
+
+The migration guide previously contained hardcoded SKUs. This causes issues when:
+- Target region has different SKUs available
+- Quota constraints require different VM families
+- Organizational standards mandate specific SKUs
+- Testing in regions with limited spot availability
+
+#### Solution: Environment-Based Configuration
+
+**Create a centralized `config.sh` pattern:**
+
+```bash
+#!/usr/bin/env bash
+# config.sh - Centralized SKU configuration for spot migration
+# Source this file before running migration scripts
+
+set -euo pipefail
+
+# ── Cluster identity ────────────────────────────────────────────────────────
+CLUSTER_NAME="${CLUSTER_NAME:-aks-spot-prod}"
+RESOURCE_GROUP="${RESOURCE_GROUP:-rg-aks-spot}"
+LOCATION="${LOCATION:-australiaeast}"
+
+# ── VM Family Selection by Pool ──────────────────────────────────────────────
+# Format: POOL_VM_SIZE_<poolname>=<sku>
+# Override these in your .env file to use different SKUs
+
+# Memory-optimized pools (priority 5 - lowest eviction risk)
+POOL_VM_SIZE_spotmemory1="${POOL_VM_SIZE_spotmemory1:-Standard_E4s_v5}"   # 4 vCPU, 32 GB
+POOL_VM_SIZE_spotmemory2="${POOL_VM_SIZE_spotmemory2:-Standard_E8s_v5}"   # 8 vCPU, 64 GB
+
+# General-purpose pools (priority 10)
+POOL_VM_SIZE_spotgeneral1="${POOL_VM_SIZE_spotgeneral1:-Standard_D4s_v5}" # 4 vCPU, 16 GB
+POOL_VM_SIZE_spotgeneral2="${POOL_VM_SIZE_spotgeneral2:-Standard_D8s_v5}" # 8 vCPU, 32 GB
+
+# Compute-optimized pools (priority 10)
+POOL_VM_SIZE_spotcompute="${POOL_VM_SIZE_spotcompute:-Standard_F8s_v2}"    # 8 vCPU, 16 GB
+
+# Standard pools (fallback)
+POOL_VM_SIZE_stdworkload="${POOL_VM_SIZE_stdworkload:-Standard_D4s_v5}"
+POOL_VM_SIZE_system="${POOL_VM_SIZE_system:-Standard_D4s_v5}"
+
+# ── Build SKU Array Dynamically ─────────────────────────────────────────────
+SPOT_SKUS=()
+for pool in spotmemory1 spotmemory2 spotgeneral1 spotgeneral2 spotcompute; do
+  var_name="POOL_VM_SIZE_${pool}"
+  sku="${!var_name}"
+  SPOT_SKUS+=("$sku")
+done
+
+echo "Configured spot SKUs for ${LOCATION}:"
+printf '  - %s\n' "${SPOT_SKUS[@]}"
+```
+
+#### Updated Quota Check Script
+
+```bash
+#!/usr/bin/env bash
+# check-spot-availability.sh - Validate SKU availability in target region
+
+set -euo pipefail
+
+# Load configuration
+source ./config.sh
+
+echo "=== Spot SKU Availability Check for ${LOCATION} ==="
+echo ""
+
+ALL_AVAILABLE=true
+
+for pool in spotmemory1 spotmemory2 spotgeneral1 spotgeneral2 spotcompute; do
+  var_name="POOL_VM_SIZE_${pool}"
+  SKU="${!var_name}"
+
+  # Check for restrictions
+  RESTRICTIONS=$(az vm list-skus --location "$LOCATION" --resource-type virtualMachines \
+    --query "[?name=='${SKU}'].restrictions | [0]" -o json 2>/dev/null || echo '[]')
+
+  if [ "$RESTRICTIONS" = "[]" ] || [ "$RESTRICTIONS" = "null" ]; then
+    echo "  ✅ ${pool}: ${SKU} - Available"
+  else
+    echo "  ❌ ${pool}: ${SKU} - Restricted"
+    echo "     Restrictions: $(echo "$RESTRICTIONS" | jq -r '.[].reasonCode' 2>/dev/null || echo 'Unknown')"
+    ALL_AVAILABLE=false
+  fi
+done
+
+echo ""
+if [ "$ALL_AVAILABLE" = true ]; then
+  echo "✅ All configured SKUs are available in ${LOCATION}"
+  exit 0
+else
+  echo "❌ Some SKUs are restricted. Update config.sh with alternative SKUs."
+  echo ""
+  echo "Available alternatives in ${LOCATION}:"
+  az vm list-skus --location "$LOCATION" --resource-type virtualMachines \
+    --query "[?contains(name, 's_v5') || contains(name, 's_v2')].name" -o tsv | \
+    grep -E '^[^ ]+$' | sort -u | head -20
+  exit 1
+fi
+```
+
+#### Region-Specific SKU Recommendations
+
+| Region | Recommended Spot SKUs | Alternatives If Restricted |
+|--------|----------------------|---------------------------|
+| **australiaeast** | D4s_v5, E4s_v5, F8s_v2 | D4ps_v5 (Arm64), D2s_v5 |
+| **eastus** | D4s_v5, E4s_v5, F8s_v2 | D4as_v5, E4as_v5 |
+| **westeurope** | D4s_v5, E4s_v5, F8s_v2 | D2s_v5, E2s_v5 |
+| **southeastasia** | D2s_v5, E2s_v5, F4s_v2 | D4s_v3 (older gen) |
+| **uksouth** | D4s_v5, E4s_v5, F8s_v2 | D4as_v5, E4as_v5 |
+
+> **Note:** See [Azure Well-Architected Framework for AKS](https://learn.microsoft.com/en-us/azure/well-architected/service-guides/azure-kubernetes-service) for regional availability considerations.
 
 ---
 
@@ -285,11 +620,19 @@ Start with a single spot pool to validate behavior before adding all 5.
 
 **Via Terraform:**
 
+> **Tip:** For production use, define VM sizes as variables in your `variables.tf` to match the configurable approach in Section 2.8. Example: `vm_size = var.spot_pools["spotgeneral1"].vm_size`
+
 ```hcl
+variable "spot_vm_size_general1" {
+  description = "VM size for spotgeneral1 pool"
+  type        = string
+  default     = "Standard_D4s_v5"  # Override via tfvars or environment
+}
+
 resource "azurerm_kubernetes_cluster_node_pool" "spotgeneral1" {
   name                  = "spotgeneral1"
   kubernetes_cluster_id = azurerm_kubernetes_cluster.main.id
-  vm_size              = "Standard_D4s_v5"
+  vm_size              = var.spot_vm_size_general1
   priority             = "Spot"
   eviction_policy      = "Delete"
   spot_max_price       = -1
@@ -322,6 +665,9 @@ resource "azurerm_kubernetes_cluster_node_pool" "spotgeneral1" {
 **Via Azure CLI:**
 
 ```bash
+# First, source your config.sh for configurable SKUs (see Section 2.8)
+source ./config.sh
+
 az aks nodepool add \
   --resource-group $RESOURCE_GROUP \
   --cluster-name $CLUSTER_NAME \
@@ -333,8 +679,8 @@ az aks nodepool add \
   --min-count 0 \
   --max-count 5 \
   --enable-cluster-autoscaler \
-  --node-vm-size Standard_D4s_v5 \
-  --zones 1 \
+  --node-vm-size "${POOL_VM_SIZE_spotgeneral1}" \
+  --zones "${POOL_ZONES_spotgeneral1:-1}" \
   --labels workload-type=spot vm-family=general cost-optimization=spot-enabled \
   --node-taints "kubernetes.azure.com/scalesetpriority=spot:NoSchedule"
 ```
@@ -669,33 +1015,36 @@ After successful pilot, add the remaining 4 spot pools for VM family diversity:
 **Via Azure CLI:**
 
 ```bash
+# First, source your config.sh for configurable SKUs (see Section 2.8)
+source ./config.sh
+
 # Memory-optimized pools (priority 5 - preferred, lowest eviction risk)
 az aks nodepool add -g $RESOURCE_GROUP -n $CLUSTER_NAME \
   --name spotmemory1 --priority Spot --eviction-policy Delete --spot-max-price -1 \
-  --node-count 0 --min-count 0 --max-count 15 --enable-cluster-autoscaler \
-  --node-vm-size Standard_E4s_v5 --zones 2 \
+  --node-count 0 --min-count 0 --max-count "${POOL_MAX_spotmemory1:-15}" --enable-cluster-autoscaler \
+  --node-vm-size "${POOL_VM_SIZE_spotmemory1}" --zones "${POOL_ZONES_spotmemory1:-2}" \
   --labels workload-type=spot vm-family=memory cost-optimization=spot-enabled \
   --node-taints "kubernetes.azure.com/scalesetpriority=spot:NoSchedule"
 
 az aks nodepool add -g $RESOURCE_GROUP -n $CLUSTER_NAME \
   --name spotmemory2 --priority Spot --eviction-policy Delete --spot-max-price -1 \
-  --node-count 0 --min-count 0 --max-count 10 --enable-cluster-autoscaler \
-  --node-vm-size Standard_E8s_v5 --zones 3 \
+  --node-count 0 --min-count 0 --max-count "${POOL_MAX_spotmemory2:-10}" --enable-cluster-autoscaler \
+  --node-vm-size "${POOL_VM_SIZE_spotmemory2}" --zones "${POOL_ZONES_spotmemory2:-3}" \
   --labels workload-type=spot vm-family=memory cost-optimization=spot-enabled \
   --node-taints "kubernetes.azure.com/scalesetpriority=spot:NoSchedule"
 
 # General/compute pools (priority 10)
 az aks nodepool add -g $RESOURCE_GROUP -n $CLUSTER_NAME \
   --name spotgeneral2 --priority Spot --eviction-policy Delete --spot-max-price -1 \
-  --node-count 0 --min-count 0 --max-count 15 --enable-cluster-autoscaler \
-  --node-vm-size Standard_D8s_v5 --zones 2 \
+  --node-count 0 --min-count 0 --max-count "${POOL_MAX_spotgeneral2:-15}" --enable-cluster-autoscaler \
+  --node-vm-size "${POOL_VM_SIZE_spotgeneral2}" --zones "${POOL_ZONES_spotgeneral2:-2}" \
   --labels workload-type=spot vm-family=general cost-optimization=spot-enabled \
   --node-taints "kubernetes.azure.com/scalesetpriority=spot:NoSchedule"
 
 az aks nodepool add -g $RESOURCE_GROUP -n $CLUSTER_NAME \
   --name spotcompute --priority Spot --eviction-policy Delete --spot-max-price -1 \
-  --node-count 0 --min-count 0 --max-count 10 --enable-cluster-autoscaler \
-  --node-vm-size Standard_F8s_v2 --zones 3 \
+  --node-count 0 --min-count 0 --max-count "${POOL_MAX_spotcompute:-10}" --enable-cluster-autoscaler \
+  --node-vm-size "${POOL_VM_SIZE_spotcompute}" --zones "${POOL_ZONES_spotcompute:-3}" \
   --labels workload-type=spot vm-family=compute cost-optimization=spot-enabled \
   --node-taints "kubernetes.azure.com/scalesetpriority=spot:NoSchedule"
 ```
@@ -1252,5 +1601,5 @@ fi
 
 ---
 
-**Last Updated:** 2026-02-08
+**Last Updated:** 2026-02-10
 **Status:** Ready for use

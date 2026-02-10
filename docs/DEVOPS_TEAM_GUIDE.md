@@ -1,8 +1,11 @@
 # DevOps Team Guide: Deploying on AKS with Spot Nodes
 
-**Audience:** Application Development Teams, DevOps Engineers  
-**Purpose:** Enable teams to deploy cost-optimized workloads on spot instances  
+**Audience:** Application Development Teams, DevOps Engineers
+**Purpose:** Enable teams to deploy cost-optimized workloads on spot instances
 **Created:** 2026-01-12
+**Last Updated:** 2026-02-10
+
+> **New to spot nodes?** This guide assumes your cluster already has spot pools configured. If you're a platform engineer setting up infrastructure, see [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) for full migration guidance or [MIGRATION_GUIDE_CONSERVATIVE.md](MIGRATION_GUIDE_CONSERVATIVE.md) for a simplified 3-pool approach.
 
 ---
 
@@ -779,7 +782,21 @@ No agenda required - drop in with questions!
 
 ---
 
+## Related Documentation
+
+| Document | Purpose | Audience |
+|----------|---------|----------|
+| [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) | Full infrastructure migration (5-7 pools, 70% target) | Platform Engineers |
+| [MIGRATION_GUIDE_CONSERVATIVE.md](MIGRATION_GUIDE_CONSERVATIVE.md) | Simplified migration (3 pools, 40% target) | Platform Engineers |
+| [SRE Operational Runbook](SRE_OPERATIONAL_RUNBOOK.md) | Incident response procedures | SRE/On-Call |
+| [Troubleshooting Guide](TROUBLESHOOTING_GUIDE.md) | Symptom-first diagnostics | All Teams |
+
+---
+
 ## FAQ
+
+**Q: Does our cluster have spot pools configured?**
+A: Check with your platform engineering team. If they're still setting up spot infrastructure, they're following [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) or [MIGRATION_GUIDE_CONSERVATIVE.md](MIGRATION_GUIDE_CONSERVATIVE.md).
 
 **Q: Will my app be less reliable on spot?**  
 A: No, IF you follow best practices (3+ replicas, graceful shutdown, PDB). spot Just means pods reschedule occasionally.
@@ -847,4 +864,4 @@ kubectl apply -f deployment.yaml --namespace=production
 This guide is maintained by the Platform Engineering team.  
 Submit improvements via PR to: [git repo link]
 
-Last Updated: 2026-01-12
+Last Updated: 2026-02-10

@@ -292,6 +292,8 @@ kubectl get deployment $DEPLOYMENT -n $NAMESPACE -o yaml > backup-$DEPLOYMENT.ya
 
 ### 3.3 Add Spot Configuration
 
+> **Tip:** For complete deployment templates with graceful shutdown, PDBs, and health checks, see [DEVOPS_TEAM_GUIDE.md](DEVOPS_TEAM_GUIDE.md) Method 2: Full Optimization.
+
 Create a new file or patch your deployment:
 
 ```yaml

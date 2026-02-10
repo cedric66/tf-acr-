@@ -5,6 +5,8 @@
 **Last Updated:** 2026-02-10
 
 > **This guide is for existing clusters.** If you are deploying a new cluster from scratch, see [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md).
+>
+> **Looking for a simpler approach?** See [MIGRATION_GUIDE_CONSERVATIVE.md](MIGRATION_GUIDE_CONSERVATIVE.md) for a streamlined 3-pool, 40% spot target guide (3-4 weeks vs 6-8 weeks).
 
 ---
 

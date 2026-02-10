@@ -1,0 +1,106 @@
+Phase,Task ID,Task,Sub-task,Owner,Consumer/Collaborator,Deliverable,Target Week,Status,Notes
+Phase 0: Pilot Preparation,0.1,Assess Pilot Clusters,,DevOps Architect,,Assessment report per cluster,W1-2,Not Started,
+Phase 0: Pilot Preparation,0.1.1,,Run pre-migration assessment on both clusters (az aks show - K8s version / network plugin / existing pools / VM sizes / zone support),DevOps Architect,Cloud Ops,Cluster assessment report,W1,Not Started,Use az aks show + az aks nodepool list
+Phase 0: Pilot Preparation,0.1.2,,Verify spot VM SKU availability in pilot region (az vm list-skus),DevOps Architect,,Available SKU list per region,W1,Not Started,Check D4s_v5 / E4s_v5 / E8s_v5 / D8s_v5 / F8s_v2
+Phase 0: Pilot Preparation,0.1.3,,Check vCPU quotas in subscription for spot families (az vm list-usage),DevOps Architect,,Quota sufficiency confirmation,W1,Not Started,Spot quota is separate from on-demand
+Phase 0: Pilot Preparation,0.1.4,,Identify workloads on 2 clusters - classify stateless (spot-eligible) vs stateful (on-demand only),DevOps Architect,App Team,Workload classification matrix,W1,Not Started,kubectl get deployments/statefulsets across namespaces
+Phase 0: Pilot Preparation,0.2,Produce Cloud Ops Migration Runbook (az CLI),,DevOps Architect,Cloud Ops,runbooks/cloudops-migration-kit/,W1-2,Not Started,All scripts must be az CLI native - no Terraform
+Phase 0: Pilot Preparation,0.2.1,,Write parameterized az aks nodepool add script for spot pools (configurable VM family / zone / pool name / min-max count),DevOps Architect,Cloud Ops,scripts/add-spot-pools.sh,W1,Not Started,Must follow .env config pattern
+Phase 0: Pilot Preparation,0.2.2,,Write az aks update script for autoscaler profile (priority expander / scan_interval=20s / scale_down_unready=3m),DevOps Architect,Cloud Ops,scripts/update-autoscaler-profile.sh,W1,Not Started,Autoscaler profile is cluster-wide setting
+Phase 0: Pilot Preparation,0.2.3,,Write priority expander ConfigMap deployment script (kubectl apply),DevOps Architect,Cloud Ops,scripts/deploy-priority-expander.sh,W1,Not Started,Based on existing priority-expander.tf template
+Phase 0: Pilot Preparation,0.2.4,,Write validation script - confirm pools healthy / nodes Ready / autoscaler config correct / labels applied,DevOps Architect,Cloud Ops,scripts/validate-spot-setup.sh,W2,Not Started,Exit codes for pass/fail automation
+Phase 0: Pilot Preparation,0.2.5,,Write rollback script - drain + delete spot pools / revert autoscaler profile,DevOps Architect,Cloud Ops,scripts/rollback-spot-pools.sh,W2,Not Started,Critical for Cloud Ops confidence
+Phase 0: Pilot Preparation,0.2.6,,Package all scripts with .env.example and step-by-step README for Cloud Ops,DevOps Architect,Cloud Ops,runbooks/cloudops-migration-kit/README.md,W2,Not Started,Zero hardcoded values - all via .env
+Phase 0: Pilot Preparation,0.3,Produce App Team Workload Kit,,DevOps Architect,App Team,runbooks/app-team-kit/,W1-2,Not Started,
+Phase 0: Pilot Preparation,0.3.1,,Create spot toleration + node affinity YAML snippet template,DevOps Architect,App Team,runbooks/app-team-kit/spot-tolerations.yaml,W1,Not Started,Based on templates/spot-tolerant-deployment.yaml.tpl
+Phase 0: Pilot Preparation,0.3.2,,Create PDB template with minAvailable: 50%,DevOps Architect,App Team,runbooks/app-team-kit/pdb-template.yaml,W1,Not Started,
+Phase 0: Pilot Preparation,0.3.3,,Create topology spread constraints template (zone + pool-type + node spread),DevOps Architect,App Team,runbooks/app-team-kit/topology-spread.yaml,W1,Not Started,All use whenUnsatisfiable: ScheduleAnyway
+Phase 0: Pilot Preparation,0.3.4,,Write Spot-Ready Workload Checklist (graceful shutdown / health probes / statelessness / preStop hooks),DevOps Architect,App Team,runbooks/app-team-kit/CHECKLIST.md,W2,Not Started,
+Phase 0: Pilot Preparation,0.3.5,,Write example Helm values overlay for spot scheduling,DevOps Architect,App Team,runbooks/app-team-kit/helm-spot-values.yaml,W2,Not Started,If teams use Helm
+Phase 0: Pilot Preparation,0.4,Set Up Observability,,DevOps Architect,FinOps,,W2,Not Started,
+Phase 0: Pilot Preparation,0.4.1,,Deploy Grafana dashboards (aks-spot-overview.json / aks-autoscaler-status.json) to pilot cluster monitoring,DevOps Architect,FinOps,Dashboards imported,W2,Not Started,Existing dashboards in monitoring/dashboards/
+Phase 0: Pilot Preparation,0.4.2,,Establish cost baseline - current compute spend on 2 pilot clusters via Azure Cost Management export,DevOps Architect,FinOps,Baseline cost report,W2,Not Started,Need 30-day spend history minimum
+Phase 0: Pilot Preparation,0.4.3,,Define success criteria with FinOps (target: 40-50% cost reduction on non-prod / <5 min pod recovery),DevOps Architect,FinOps,Signed-off success criteria doc,W2,Not Started,
+Phase 0: Pilot Preparation,0.5,Define Governance and Communication,,DevOps Architect,All Teams,,W1,Not Started,
+Phase 0: Pilot Preparation,0.5.1,,Create RACI matrix across all 4 teams (Cloud Ops / App / Automation / FinOps),DevOps Architect,All Teams,RACI document,W1,Not Started,
+Phase 0: Pilot Preparation,0.5.2,,Set up comms channel (Teams/Slack) for pilot coordination,DevOps Architect,All Teams,Channel created,W1,Not Started,
+Phase 0: Pilot Preparation,0.5.3,,Schedule kick-off with volunteer app team + Cloud Ops,DevOps Architect,Cloud Ops + App Team,Meeting invite,W1,Not Started,
+Phase 0: Pilot Preparation,0.5.4,,Create pilot timeline (2-week sprint with daily standups in week 1),DevOps Architect,All Teams,Timeline document,W1,Not Started,
+Phase 1: Pilot Execution,1.1,Infrastructure Changes on Pilot Clusters,,Cloud Ops,DevOps Architect,,W3-4,Not Started,Architect guides / Cloud Ops executes
+Phase 1: Pilot Execution,1.1.1,,Cloud Ops runs add-spot-pools.sh on Cluster 1 (single canary pool first - spotgeneral1 D4s_v5),Cloud Ops,DevOps Architect,Spot pool added,W3,Not Started,Start with 1 pool to validate
+Phase 1: Pilot Execution,1.1.2,,Architect validates - nodes join / labels correct / taint applied / autoscaler sees pool,DevOps Architect,,Validation passed,W3,Not Started,
+Phase 1: Pilot Execution,1.1.3,,Cloud Ops runs update-autoscaler-profile.sh (priority expander + tuned settings),Cloud Ops,DevOps Architect,Autoscaler configured,W3,Not Started,
+Phase 1: Pilot Preparation,1.1.4,,Cloud Ops deploys priority expander ConfigMap,Cloud Ops,DevOps Architect,ConfigMap deployed,W3,Not Started,
+Phase 1: Pilot Execution,1.1.5,,Architect runs validate-spot-setup.sh - confirm full health,DevOps Architect,,Full validation passed,W3,Not Started,
+Phase 1: Pilot Execution,1.1.6,,Repeat 1.1.1-1.1.5 on Cluster 2,Cloud Ops + DevOps Architect,,Both clusters migrated,W3,Not Started,
+Phase 1: Pilot Execution,1.2,Workload Migration on Pilot Clusters,,App Team,DevOps Architect,,W3-4,Not Started,
+Phase 1: Pilot Execution,1.2.1,,App team selects 1 stateless workload per cluster for pilot,App Team,DevOps Architect,Selected workloads,W3,Not Started,
+Phase 1: Pilot Execution,1.2.2,,App team adds spot tolerations / node affinity / PDB / topology spread using kit from 0.3,App Team,DevOps Architect,Modified manifests,W3-4,Not Started,
+Phase 1: Pilot Execution,1.2.3,,Deploy modified workload - verify pods land on spot nodes (kubectl get pods -o wide),App Team,DevOps Architect,Pods on spot nodes,W4,Not Started,
+Phase 1: Pilot Execution,1.2.4,,Architect validates pod distribution / PDB enforced / affinity respected,DevOps Architect,,Validation report,W4,Not Started,
+Phase 1: Pilot Execution,1.3,Resilience Testing,,DevOps Architect,Cloud Ops,,W4-5,Not Started,
+Phase 1: Pilot Execution,1.3.1,,Simulate spot eviction - cordon + drain a spot node / observe pod rescheduling and node replacement,DevOps Architect,,Eviction test results,W4,Not Started,
+Phase 1: Pilot Execution,1.3.2,,Measure pod recovery time (target: <5 min from eviction to all pods Running),DevOps Architect,FinOps,Recovery time measurement,W4,Not Started,
+Phase 1: Pilot Execution,1.3.3,,Test PDB enforcement - attempt drain that would violate minAvailable / confirm it blocks,DevOps Architect,,PDB test results,W4,Not Started,
+Phase 1: Pilot Execution,1.3.4,,Expand to full pool diversity (add remaining 4 spot pools) on both clusters,Cloud Ops,DevOps Architect,5 spot pools active,W5,Not Started,
+Phase 1: Pilot Execution,1.3.5,,Run spot-behavior test suite (tests/spot-behavior/) against pilot clusters,DevOps Architect,,Test suite results,W5,Not Started,50+ runtime behavior tests
+Phase 1: Pilot Execution,1.4,Pilot Review and Sign-off,,DevOps Architect,All Teams,,W5,Not Started,
+Phase 1: Pilot Execution,1.4.1,,Compile pilot results - cost savings / availability metrics / recovery times / incidents,DevOps Architect,All Teams,Pilot results report,W5,Not Started,
+Phase 1: Pilot Execution,1.4.2,,FinOps validates cost reduction vs baseline,FinOps,DevOps Architect,Cost validation report,W5,Not Started,
+Phase 1: Pilot Execution,1.4.3,,Document lessons learned / adjust scripts and runbooks based on findings,DevOps Architect,,Updated runbooks,W5,Not Started,
+Phase 1: Pilot Execution,1.4.4,,Get sign-off from all teams to proceed to Wave 1,DevOps Architect,All Teams,Sign-off document,W5,Not Started,Go/no-go gate
+Phase 2: Standardize and Scale-Ready,2.1,Harden Migration Scripts,,DevOps Architect,Cloud Ops,,W6-7,Not Started,
+Phase 2: Standardize and Scale-Ready,2.1.1,,Incorporate pilot feedback into all scripts (edge cases / error handling / idempotency),DevOps Architect,Cloud Ops,Updated scripts,W6,Not Started,
+Phase 2: Standardize and Scale-Ready,2.1.2,,Add batch execution wrapper - takes CSV of cluster names + resource groups / runs migration per cluster with pause between batches,DevOps Architect,Cloud Ops,scripts/batch-migrate.sh,W6,Not Started,
+Phase 2: Standardize and Scale-Ready,2.1.3,,Add pre-flight checks to batch script - quota validation / K8s version check / existing pool conflict detection,DevOps Architect,Cloud Ops,Built into batch script,W7,Not Started,
+Phase 2: Standardize and Scale-Ready,2.1.4,,Add dry-run mode (--dry-run) to all scripts so Cloud Ops can preview changes,DevOps Architect,Cloud Ops,Script flag added,W7,Not Started,
+Phase 2: Standardize and Scale-Ready,2.2,Market-Specific Configuration,,DevOps Architect,Cloud Ops,,W6-7,Not Started,18 markets
+Phase 2: Standardize and Scale-Ready,2.2.1,,Map all 18 markets to their Azure regions,DevOps Architect,,config/market-region-map.csv,W6,Not Started,
+Phase 2: Standardize and Scale-Ready,2.2.2,,For each region - check spot SKU availability / vCPU quotas / historical eviction rates,DevOps Architect,,config/region-spot-matrix.csv,W6,Not Started,az vm list-skus + az vm list-usage per region
+Phase 2: Standardize and Scale-Ready,2.2.3,,Assign VM family diversity per market to avoid cannibalization (HK + AU get extra diversity),DevOps Architect,,VM family assignment doc,W7,Not Started,Critical for high-density markets
+Phase 2: Standardize and Scale-Ready,2.2.4,,Create per-market .env templates with region-specific pool configs,DevOps Architect,Cloud Ops,config/markets/<market>.env,W7,Not Started,
+Phase 2: Standardize and Scale-Ready,2.3,Automation Team Integration (New Clusters),,DevOps Architect,Automation Team,,W7-8,Not Started,Terraform module handoff
+Phase 2: Standardize and Scale-Ready,2.3.1,,Hand off Terraform module (terraform/modules/aks-spot-optimized/) to Automation Team with integration guide,DevOps Architect,Automation Team,Module + integration guide,W7,Not Started,
+Phase 2: Standardize and Scale-Ready,2.3.2,,Review Automation Team Terraform pipeline integration (PR review),DevOps Architect,Automation Team,PR approved,W8,Not Started,
+Phase 2: Standardize and Scale-Ready,2.3.3,,Ensure new clusters created with spot pools from day 1,Automation Team,DevOps Architect,Pipeline updated,W8,Not Started,No migration needed for new clusters
+Phase 2: Standardize and Scale-Ready,2.3.4,,Add Terraform module version pinning policy,DevOps Architect,Automation Team,Versioning policy doc,W8,Not Started,
+Phase 2: Standardize and Scale-Ready,2.4,Governance and Azure Policy,,DevOps Architect,Cloud Ops,,W7-8,Not Started,
+Phase 2: Standardize and Scale-Ready,2.4.1,,Draft Azure Policy - audit deployments with replicas > 1 that lack PDB,DevOps Architect,Cloud Ops,Azure Policy JSON,W7,Not Started,
+Phase 2: Standardize and Scale-Ready,2.4.2,,Draft Azure Policy - deny StatefulSets without anti-affinity to spot nodes,DevOps Architect,Cloud Ops,Azure Policy JSON,W7,Not Started,Prevent databases on spot nodes
+Phase 2: Standardize and Scale-Ready,2.4.3,,Define spot node pool naming convention across all markets (12-char alphanumeric limit),DevOps Architect,Cloud Ops + Automation Team,Naming standard doc,W7,Not Started,AKS pool name constraint
+Phase 2: Standardize and Scale-Ready,2.4.4,,Create operational escalation path for spot pool failures at scale,DevOps Architect,Cloud Ops,Escalation matrix,W8,Not Started,
+Phase 2: Standardize and Scale-Ready,2.5,Fleet Observability,,DevOps Architect,FinOps,,W7-8,Not Started,
+Phase 2: Standardize and Scale-Ready,2.5.1,,Build Azure Monitor Workbook for aggregated spot metrics across clusters,DevOps Architect,FinOps,Azure Workbook,W7,Not Started,Cannot use 200+ individual dashboards
+Phase 2: Standardize and Scale-Ready,2.5.2,,Define KPIs - savings rate per market / eviction rate / fallback % / pod recovery P95,DevOps Architect,FinOps,KPI definitions,W7,Not Started,
+Phase 2: Standardize and Scale-Ready,2.5.3,,Set up alerting - >20 evictions/hour / all spot pools empty / pods pending >5 min,DevOps Architect,FinOps + Cloud Ops,Alert rules configured,W8,Not Started,Based on SRE runbook thresholds
+Phase 2: Standardize and Scale-Ready,2.6,Training,,DevOps Architect,All Teams,,W8,Not Started,
+Phase 2: Standardize and Scale-Ready,2.6.1,,Create Cloud Ops training - running migration scripts / troubleshooting spot pools / using rollback,DevOps Architect,Cloud Ops,Training material,W8,Not Started,
+Phase 2: Standardize and Scale-Ready,2.6.2,,Create App Team training - spot-ready workload patterns / graceful shutdown / testing tolerations,DevOps Architect,App Teams,Training material,W8,Not Started,
+Phase 2: Standardize and Scale-Ready,2.6.3,,Create FinOps training - reading spot dashboards / cost attribution / reporting,DevOps Architect,FinOps,Training material,W8,Not Started,
+Phase 2: Standardize and Scale-Ready,2.6.4,,Run training sessions (1 per team),DevOps Architect,All Teams,Sessions completed,W8,Not Started,
+Phase 3: Wave 1 Non-Prod Rollout,3.1,Wave Planning,,DevOps Architect,All Teams,,W9,Not Started,
+Phase 3: Wave 1 Non-Prod Rollout,3.1.1,,Prioritize markets - start with smallest markets / save HK + AU for last,DevOps Architect,,Rollout sequence,W9,Not Started,
+Phase 3: Wave 1 Non-Prod Rollout,3.1.2,,Create cluster inventory per market (name / RG / region / current node count / K8s version),DevOps Architect,Cloud Ops,inventory/<market>.csv,W9,Not Started,
+Phase 3: Wave 1 Non-Prod Rollout,3.1.3,,Define batch size - 5-10 clusters per batch / 1-2 batches per week,DevOps Architect,Cloud Ops,Rollout schedule,W9,Not Started,
+Phase 3: Wave 1 Non-Prod Rollout,3.1.4,,Define go/no-go criteria between batches (no P1/P2 incidents from previous batch),DevOps Architect,All Teams,Gate criteria doc,W9,Not Started,
+Phase 3: Wave 1 Non-Prod Rollout,3.2,Batch Execution (repeats per market),,Cloud Ops,DevOps Architect,,W10-16,Not Started,
+Phase 3: Wave 1 Non-Prod Rollout,3.2.1,,Run pre-flight checks for batch (batch-migrate.sh --dry-run),DevOps Architect,Cloud Ops,Pre-flight report,Per batch,Not Started,
+Phase 3: Wave 1 Non-Prod Rollout,3.2.2,,Cloud Ops executes batch migration (spot pools + autoscaler + priority expander),Cloud Ops,DevOps Architect,Clusters migrated,Per batch,Not Started,
+Phase 3: Wave 1 Non-Prod Rollout,3.2.3,,Architect validates batch - all pools healthy / dashboards green,DevOps Architect,,Validation passed,Per batch,Not Started,
+Phase 3: Wave 1 Non-Prod Rollout,3.2.4,,Notify app teams that spot pools are available on their clusters,DevOps Architect,App Teams,Notification sent,Per batch,Not Started,
+Phase 3: Wave 1 Non-Prod Rollout,3.2.5,,App teams migrate workloads at their own pace using self-service kit,App Teams,DevOps Architect,Workloads migrated,Ongoing,Not Started,
+Phase 3: Wave 1 Non-Prod Rollout,3.2.6,,FinOps captures weekly cost delta per market,FinOps,DevOps Architect,Weekly cost report,Weekly,Not Started,
+Phase 3: Wave 1 Non-Prod Rollout,3.3,HK + AU Markets (Higher Risk),,DevOps Architect,Cloud Ops,,W14-16,Not Started,High-density markets - extra caution
+Phase 3: Wave 1 Non-Prod Rollout,3.3.1,,Extra SKU diversity - ensure at least 3 VM families per cluster in high-density markets,DevOps Architect,Cloud Ops,Diversity config,W14,Not Started,Prevent spot cannibalization
+Phase 3: Wave 1 Non-Prod Rollout,3.3.2,,Stagger rollout - max 10 clusters per day in same region,DevOps Architect,Cloud Ops,Staggered schedule,W14,Not Started,Avoid regional quota spike
+Phase 3: Wave 1 Non-Prod Rollout,3.3.3,,Pre-request quota increase if needed (az quota create),DevOps Architect,Cloud Ops,Quota approved,W13,Not Started,Submit before rollout begins
+Phase 3: Wave 1 Non-Prod Rollout,3.4,Wave 1 Review,,DevOps Architect,All Teams,,W16,Not Started,
+Phase 3: Wave 1 Non-Prod Rollout,3.4.1,,Aggregate results - total savings / incidents / eviction patterns per market,DevOps Architect,All Teams,Wave 1 report,W16,Not Started,
+Phase 3: Wave 1 Non-Prod Rollout,3.4.2,,FinOps presents cost savings to leadership,FinOps,DevOps Architect + Leadership,Cost presentation,W16,Not Started,
+Phase 3: Wave 1 Non-Prod Rollout,3.4.3,,Decision point - proceed to production clusters? adjust approach?,DevOps Architect,All Teams + Leadership,Go/no-go decision,W16,Not Started,
+Phase 4: Ongoing Operations,4.1,Monitor fleet-wide spot health dashboard,Daily (W1) then weekly,DevOps Architect,,Dashboard reviews,Ongoing,Not Started,
+Phase 4: Ongoing Operations,4.2,Review eviction trends / adjust VM family assignments if a SKU gets hot,,DevOps Architect,Cloud Ops,Monthly review,Monthly,Not Started,
+Phase 4: Ongoing Operations,4.3,Update scripts/module when AKS releases fixes for known bugs (#3528 / #4400),,DevOps Architect,,Updated scripts,As needed,Not Started,
+Phase 4: Ongoing Operations,4.4,FinOps monthly cost report per market,,FinOps,DevOps Architect + Leadership,Monthly cost report,Monthly,Not Started,
+Phase 4: Ongoing Operations,4.5,Descheduler deployment for sticky fallback (if pods accumulate on standard pools),,DevOps Architect,Cloud Ops,Descheduler deployed,After Wave 1 data,Not Started,Only if data confirms need
+Phase 4: Ongoing Operations,4.6,Quota reviews as cluster count grows,,DevOps Architect,Cloud Ops,Quota review report,Quarterly,Not Started,

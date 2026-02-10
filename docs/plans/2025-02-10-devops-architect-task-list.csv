@@ -1,0 +1,31 @@
+Task_ID,Phase,Category,Task_Description,Team_Collaboration,Priority,Estimated_Duration,Dependencies,Deliverable,Status
+DA-001,Discovery,Architecture Validation,Review existing AKS infrastructure and identify eligible clusters for spot migration,CloudOps (environment access),P1,1 week,DA-002,Eligibility assessment document,Not Started
+DA-002,Discovery,Stakeholder Alignment,Conduct kickoff workshop with CloudOps and DevOps leads to define success criteria and rollout timeline,CloudOps + DevOps,P1,3 days,DA-003,Workshop notes and signed-off charter,Not Started
+DA-003,Discovery,Capacity Planning,Analyze current workload patterns to determine spot pool sizing and SKU diversification strategy,CloudOps (metrics access),P1,1 week,DA-001,Spot sizing recommendation document,Not Started
+DA-004,Design,Target Architecture,Finalize spot node pool configuration (D/E/F families, 3 AZs) based on regional capacity analysis,CloudOps (capacity data),P1,3 days,DA-003,Architecture decision record,Not Started
+DA-005,Design,Fallback Strategy,Define on-demand fallback pool sizing and priority expander configuration,DevOps (workload requirements),P1,2 days,DA-004,Fallback policy document,Not Started
+DA-006,Design,Monitoring Strategy,Design Grafana dashboards and alerting thresholds for eviction monitoring,CloudOps (monitoring stack),P1,2 days,DA-007,Monitoring requirements spec,Not Started
+DA-007,Design,Security Review,Validate network policies, RBAC, and Managed Identity configuration with security team,Security team,P2,1 week,None,Security approval document,Not Started
+DA-008,Preparation,Environment Setup,Create Azure service principal and configure Terraform state storage,CloudOps (subscription access),P1,2 days,DA-002,Infrastructure ready for IaC,Not Started
+DA-009,Preparation,Module Testing,Run Terraform module validation and unit tests in isolated environment,DevOps,P1,1 day,DA-008,Test validation report,Not Started
+DA-010,Preparation,Runbook Validation,Review and adapt SRE runbooks for organizational context and team on-call structure,CloudOps,P2,2 days,DA-006,Customized runbooks,Not Started
+DA-011,Pilot Deployment,Pilot Cluster Selection,Select and approve pilot cluster (dev/test environment) for initial spot migration,DevOps (workload owner),P1,1 day,DA-005,Pilot cluster nomination,Not Started
+DA-012,Pilot Deployment,Terraform Apply,Deploy spot-enabled AKS module to pilot environment,CloudOps (apply permissions),P1,1 day,DA-009,AKS cluster with spot pools,Not Started
+DA-013,Pilot Deployment,Baseline Metrics,Establish baseline metrics before migrating workloads (cost, performance, pod distribution),DevOps,P1,2 days,DA-012,Baseline metrics report,Not Started
+DA-014,Pilot Deployment,Workload Migration,Migrate first batch of spot-tolerant workloads using provided deployment templates,DevOps (app teams),P1,3 days,DA-013,Migrated workloads validation,Not Started
+DA-015,Pilot Deployment,Chaos Testing,Execute spot eviction simulation scenarios to validate resilience,DevOps + CloudOps,P1,2 days,DA-014,Chaos test results and findings,Not Started
+DA-016,Pilot Deployment,Post-Pilot Review,Conduct retrospective with teams and document lessons learned,CloudOps + DevOps,P1,1 day,DA-015,Pilot retrospective document,Not Started
+DA-017,Production Rollout,Staging Environment,Deploy full spot configuration to staging environment and validate end-to-end,CloudOps,P1,2 days,DA-016,Staging validation report,Not Started
+DA-018,Production Rollout,Production Deployment Plan,Create detailed production rollout plan with rollback triggers and approval gates,CloudOps + DevOps,P1,3 days,DA-017,Production rollout plan (approved),Not Started
+DA-019,Production Rollout,Production Deployment,Execute production deployment during maintenance window (or blue-green if supported),CloudOps (execution),P1,1 day,DA-018,Production cluster live,Not Started
+DA-020,Production Rollout,Gradual Migration,Migrate eligible production workloads to spot pools in batches (20% increments),DevOps (app teams),P1,2 weeks,DA-019,All eligible workloads on spot,Not Started
+DA-021,Production Rollout,Sticky Fallback Fix,Deploy Kubernetes Descheduler to handle post-eviction pod migration,CloudOps,P2,1 day,DA-019,Descheduler operational,Not Started
+DA-022,Validation,Cost Validation,Verify actual cost savings against projected targets (30-day measurement),CloudOps (cost data),P1,4 weeks,DA-020,Cost savings analysis report,Not Started
+DA-023,Validation,SLA Validation,Confirm 99.9% availability target met with spot eviction events handled gracefully,DevOps (SLA tracking),P1,4 weeks,DA-020,SLA compliance report,Not Started
+DA-024,Validation,Incident Response,Conduct post-mortem if any spot-related incidents occurred during rollout,CloudOps + DevOps,P2,1 week,DA-020,Incident reports (if any),Not Started
+DA-025,Handover,Documentation,Finalize all documentation including architecture diagrams, runbooks, and troubleshooting guides,CloudOps + DevOps,P1,1 week,DA-022,Complete documentation package,Not Started
+DA-026,Handover,Knowledge Transfer,Conduct training sessions for CloudOps (operations) and DevOps (workload configuration),CloudOps + DevOps,P1,2 days,DA-025,Training materials delivered,Not Started
+DA-027,Handover,Runbook Handoff,Formal transfer of on-call responsibilities and runbook ownership to CloudOps,CloudOps,P1,1 week,DA-025,Ownership transfer completed,Not Started
+DA-028,Optimization,Performance Tuning,Analyze autoscaler behavior and tune scan intervals/scale-down delays,CloudOps,P2,2 weeks,DA-020,Optimized autoscaler profile,Not Started
+DA-029,Optimization,Cost Optimization,Review spot pool utilization and adjust SKU mix based on actual regional availability,CloudOps,P2,1 week,DA-022,SKU mix recommendations,Not Started
+DA-030,Optimization,Continuous Improvement,Establish quarterly review cadence for spot performance and new AKS feature adoption,CloudOps + DevOps,P3,Ongoing,DA-025,Review schedule established,Not Started

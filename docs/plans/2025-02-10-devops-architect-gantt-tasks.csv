@@ -1,0 +1,54 @@
+Task_ID,WBS,Task_Name,Start,Duration,End,Predecessor,Resource,Percent_Complete,Priority,Notes,Phase,Team
+DA-001,1.1,Review existing AKS infrastructure and identify eligible clusters,Week 1 Mon,5 d,Week 1 Fri,,DevOps Architect,0%,High,Identify 2 clusters for pilot,Discovery,CloudOps
+DA-002,1.2,Conduct kickoff workshop with CloudOps and DevOps leads,Week 1 Mon,1 d,Week 1 Mon,,DevOps Architect,0%,High,Define success criteria and rollout timeline,Discovery,All
+DA-003,1.3,Analyze current workload patterns for spot pool sizing,Week 1 Tue,5 d,Week 1 Fri,DA-002,DevOps Architect,0%,High,Determine SKU diversification strategy,Discovery,CloudOps
+DA-004,1.4,Finalize spot node pool configuration (D/E/F families, 3 AZs),Week 2 Mon,3 d,Week 2 Wed,DA-003,DevOps Architect,0%,High,Architecture decision record,Discovery,CloudOps
+DA-005,1.5,Define on-demand fallback pool sizing and priority expander,Week 2 Thu,2 d,Week 2 Fri,DA-004,DevOps Architect,0%,High,Fallback policy document,Discovery,DevOps
+DA-006,1.6,Design Grafana dashboards and alerting thresholds,Week 2 Mon,2 d,Week 2 Tue,DA-003,DevOps Architect,0%,Medium,Monitoring requirements spec,Discovery,CloudOps
+DA-007,1.7,Security review of network policies and RBAC configuration,Week 2 Mon,5 d,Week 2 Fri,,DevOps Architect,0%,Medium,Security approval document,Discovery,Security
+DA-008,2.1,Create Azure service principal and configure Terraform state storage,Week 3 Mon,2 d,Week 3 Tue,DA-005,DevOps Architect,0%,High,Infrastructure ready for IaC,Preparation,CloudOps
+DA-009,2.2,Run Terraform module validation and unit tests,Week 3 Wed,1 d,Week 3 Wed,DA-008,DevOps Architect,0%,High,Test validation report,Preparation,DevOps
+DA-010,2.3,Review and adapt SRE runbooks for organizational context,Week 3 Thu,2 d,Week 3 Fri,DA-006,DevOps Architect,0%,Medium,Customized runbooks,Preparation,CloudOps
+DA-011,2.4,Validate non-prod environment readiness for testing,Week 3 Fri,1 d,Week 3 Fri,DA-009,DevOps Architect,0%,High,Non-prod validation report,Preparation,CloudOps
+DA-012,3.1,Execute complete test suite in non-prod environment (unit + integration),Week 4 Mon,3 d,Week 4 Wed,DA-011,DevOps Architect,0%,High,MUST PASS before pilot,Non-Prod Testing,DevOps
+DA-013,3.2,Run chaos engineering tests in non-prod (eviction scenarios),Week 4 Thu,2 d,Week 4 Fri,DA-012,DevOps Architect,0%,High,Validate resilience before pilot,Non-Prod Testing,DevOps
+DA-014,3.3,Fix any issues found in non-prod testing,Week 5 Mon,2 d,Week 5 Tue,DA-013,DevOps Architect,0%,High,Blocker if critical issues remain,Non-Prod Testing,DevOps
+DA-015,3.4,Obtain sign-off from non-prod testing phase,Week 5 Wed,1 d,Week 5 Wed,DA-014,DevOps Architect,0%,High,Required to proceed to pilot,Non-Prod Testing,All
+DA-016,4.1,Select and approve Pilot Cluster #1 (dev/test environment),Week 5 Mon,1 d,Week 5 Mon,DA-015,DevOps Architect,0%,High,First of 2 pilot clusters,Pilot,DevOps
+DA-017,4.2,Select and approve Pilot Cluster #2 (dev/test environment),Week 5 Mon,1 d,Week 5 Mon,DA-015,DevOps Architect,0%,High,Second of 2 pilot clusters,Pilot,DevOps
+DA-018,4.3,Deploy spot-enabled AKS module to Pilot Cluster #1,Week 5 Tue,1 d,Week 5 Tue,DA-016,DevOps Architect,0%,High,AKS cluster with spot pools,Pilot,CloudOps
+DA-019,4.4,Deploy spot-enabled AKS module to Pilot Cluster #2,Week 5 Wed,1 d,Week 5 Wed,DA-017,DA-018,AKS cluster with spot pools,Pilot,CloudOps
+DA-020,4.5,Establish baseline metrics for both pilot clusters,Week 5 Thu-Fri,2 d,Week 5 Fri,DA-019,DevOps Architect,0%,High,Baseline metrics report,Pilot,DevOps
+DA-021,4.6,Migrate first batch of spot-tolerant workloads to Pilot Cluster #1,Week 6 Mon,2 d,Week 6 Tue,DA-020,DevOps Architect,0%,High,Migrated workloads validation,Pilot,DevOps
+DA-022,4.7,Migrate first batch of spot-tolerant workloads to Pilot Cluster #2,Week 6 Wed,2 d,Week 6 Thu,DA-020,DA-021,Migrated workloads validation,Pilot,DevOps
+DA-023,4.8,Execute spot eviction simulation on Pilot Cluster #1,Week 6 Fri,1 d,Week 6 Fri,DA-021,DevOps Architect,0%,High,Chaos test results,Pilot,DevOps
+DA-024,4.9,Execute spot eviction simulation on Pilot Cluster #2,Week 7 Mon,1 d,Week 7 Mon,DA-022,DA-023,Chaos test results,Pilot,DevOps
+DA-025,4.10,Monitor pilot clusters for stability issues (48-hour observation),Week 7 Tue-Wed,2 d,Week 7 Wed,DA-024,DevOps Architect,0%,High,Stability observation report,Pilot,CloudOps
+DA-026,4.11,Conduct pilot retrospective with teams and document lessons learned,Week 7 Thu,1 d,Week 7 Thu,DA-025,DevOps Architect,0%,High,Pilot retrospective document,Pilot,All
+DA-027,4.12,Obtain pilot sign-off to proceed to staging,Week 7 Fri,1 d,Week 7 Fri,DA-026,DevOps Architect,0%,High,Required gate for staging,Pilot,All
+DA-028,5.1,Deploy full spot configuration to staging environment,Week 8 Mon-Tue,2 d,Week 8 Tue,DA-027,DevOps Architect,0%,High,Staging validation report,Staging,CloudOps
+DA-029,5.2,Migrate eligible staging workloads to spot pools,Week 8 Wed-Thu,2 d,Week 8 Thu,DA-028,DevOps Architect,0%,High,Staging workload validation,Staging,DevOps
+DA-030,5.3,Execute chaos testing in staging environment,Week 8 Fri,1 d,Week 8 Fri,DA-029,DevOps Architect,0%,High,Staging chaos test results,Staging,DevOps
+DA-031,5.4,Obtain staging sign-off for production deployment,Week 9 Mon,1 d,Week 9 Mon,DA-030,DevOps Architect,0%,High,Required gate for production,Staging,All
+DA-032,6.1,Create detailed production rollout plan with rollback triggers,Week 9 Tue-Thu,3 d,Week 9 Thu,DA-031,DevOps Architect,0%,High,Production rollout plan (approved),Production Planning,All
+DA-033,6.2,Conduct production deployment go/no-go meeting,Week 9 Fri,1 d,Week 9 Fri,DA-032,DevOps Architect,0%,High,Go/no-go decision documented,Production Planning,All
+DA-034,6.3,Execute production deployment during maintenance window,Week 10 Mon,1 d,Week 10 Mon,DA-033,DevOps Architect,0%,High,Production cluster live,Production Rollout,CloudOps
+DA-035,6.4,Deploy Kubernetes Descheduler for sticky fallback fix,Week 10 Tue,1 d,Week 10 Tue,DA-034,DevOps Architect,0%,Medium,Descheduler operational,Production Rollout,CloudOps
+DA-036,6.5,Migrate Batch 1 (20%) of eligible production workloads to spot,Week 10 Wed,1 d,Week 10 Wed,DA-035,DevOps Architect,0%,High,First batch live,Production Rollout,DevOps
+DA-037,6.6,Monitor Batch 1 for 72 hours before proceeding,Week 10 Thu-Fri,Week 11 Mon,2 d,Week 11 Mon,DA-036,DevOps Architect,0%,High,Observation period,Production Rollout,CloudOps
+DA-038,6.7,Migrate Batch 2 (40% cumulative) of eligible production workloads to spot,Week 11 Tue,1 d,Week 11 Tue,DA-037,DevOps Architect,0%,High,Second batch live,Production Rollout,DevOps
+DA-039,6.8,Monitor Batch 2 for 72 hours before proceeding,Week 11 Wed-Fri,3 d,Week 11 Fri,DA-038,DevOps Architect,0%,High,Observation period,Production Rollout,CloudOps
+DA-040,6.9,Migrate Batch 3 (70% cumulative) of eligible production workloads to spot,Week 12 Mon,1 d,Week 12 Mon,DA-039,DevOps Architect,0%,High,Third batch live,Production Rollout,DevOps
+DA-041,6.10,Monitor Batch 3 for 72 hours before proceeding,Week 12 Tue-Thu,3 d,Week 12 Thu,DA-040,DevOps Architect,0%,High,Observation period,Production Rollout,CloudOps
+DA-042,6.11,Migrate Batch 4 (100% of eligible) production workloads to spot,Week 12 Fri,1 d,Week 12 Fri,DA-041,DevOps Architect,0%,High,All eligible workloads on spot,Production Rollout,DevOps
+DA-043,6.12,Final production migration verification (48-hour stability check),Week 13 Mon-Tue,2 d,Week 13 Tue,DA-042,DevOps Architect,0%,High,Stability verification complete,Production Rollout,CloudOps
+DA-044,7.1,Verify actual cost savings against projected targets (30-day measurement),Week 14 Mon,4 w,Week 17 Fri,DA-043,DevOps Architect,0%,High,Cost savings analysis report,Validation,CloudOps
+DA-045,7.2,Confirm 99.9% availability target met with spot eviction events handled,Week 14 Mon,4 w,Week 17 Fri,DA-043,DevOps Architect,0%,High,SLA compliance report,Validation,DevOps
+DA-046,7.3,Conduct post-implementation review and document final results,Week 18 Mon-Wed,3 d,Week 18 Wed,DA-044,DA-045,DevOps Architect,0%,High,Post-implementation review document,Validation,All
+DA-047,8.1,Finalize all documentation (architecture diagrams, runbooks, troubleshooting guides),Week 18 Thu-Fri,Week 19 Mon,3 d,Week 19 Mon,DA-046,DevOps Architect,0%,High,Complete documentation package,Handover,All
+DA-048,8.2,Conduct training sessions for CloudOps (operations),Week 19 Tue,1 d,Week 19 Tue,DA-047,DevOps Architect,0%,High,Training delivered,Handover,CloudOps
+DA-049,8.3,Conduct training sessions for DevOps (workload configuration),Week 19 Wed,1 d,Week 19 Wed,DA-047,DevOps Architect,0%,High,Training delivered,Handover,DevOps
+DA-050,8.4,Formal transfer of on-call responsibilities and runbook ownership to CloudOps,Week 19 Thu-Fri,Week 20 Mon,3 d,Week 20 Mon,DA-048,DA-049,DevOps Architect,0%,High,Ownership transfer completed,Handover,CloudOps
+DA-051,9.1,Analyze autoscaler behavior and tune scan intervals/scale-down delays,Week 20 Tue,2 w,Week 21 Fri,DA-050,DevOps Architect,0%,Medium,Optimized autoscaler profile,Optimization,CloudOps
+DA-052,9.2,Review spot pool utilization and adjust SKU mix based on regional availability,Week 22 Mon,1 w,Week 22 Fri,DA-051,DevOps Architect,0%,Medium,SKU mix recommendations,Optimization,CloudOps
+DA-053,9.3,Establish quarterly review cadence for spot performance and new AKS feature adoption,Week 23 Mon,1 d,Week 23 Mon,DA-052,DevOps Architect,0%,Low,Review schedule established,Optimization,All

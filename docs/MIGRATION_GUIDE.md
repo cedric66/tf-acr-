@@ -2,7 +2,7 @@
 
 **Audience:** Cloud Operations (Infrastructure) and Application/Workload Teams
 **Purpose:** Step-by-step guide to safely add spot node pools to an existing AKS cluster and migrate workloads
-**Last Updated:** 2026-02-10
+**Last Updated:** 2026-02-11
 
 > **This guide is for existing clusters.** If you are deploying a new cluster from scratch, see [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md).
 >
@@ -101,8 +101,8 @@ az aks show -g $RESOURCE_GROUP -n $CLUSTER_NAME \
 > **Note:** For configurable SKU selection, see [Section 2.8: Configurable SKU Selection](#28-configurable-sku-selection).
 
 ```bash
-# First, create or source your config.sh (see Section 2.8)
-source ./config.sh
+# First, source your `scripts/migration/config.sh` (see Section 2.8)
+source scripts/migration/config.sh
 
 LOCATION=$(az aks show -g $RESOURCE_GROUP -n $CLUSTER_NAME --query location -o tsv)
 
@@ -209,9 +209,9 @@ terraform plan
 **Option B2: Add spot pools via Azure CLI only (faster, no Terraform)**
 
 ```bash
-# First, create config.sh with your SKU preferences (see Section 2.8)
+# First, configure `scripts/migration/config.sh` with your SKU preferences (see Section 2.8)
 # Then source it before running commands
-source ./config.sh
+source scripts/migration/config.sh
 
 # Add a spot pool directly via CLI
 az aks nodepool add \
@@ -391,32 +391,8 @@ max_count = ceil(44 / 4 × 1.5) = ceil(16.5) = 17
 
 #### Step 5: Validate Against Quota
 
-```bash
-#!/usr/bin/env bash
-# validate-quota.sh - Check if quota supports your pool sizing
-
-LOCATION="${LOCATION:-australiaeast}"
-
-# Sum of max_count × vCPUs for all pools
-TOTAL_SPOT_VCPUS=$((
-  17*4 + 9*8 + 17*4 + 5*8 + 5*8
-))  # = 264 vCPUs max spot capacity
-
-echo "=== Quota Validation ==="
-echo "Max spot vCPUs needed: $TOTAL_SPOT_VCPUS"
-
-# Check current quota
-CURRENT_QUOTA=$(az vm list-usage --location $LOCATION \
-  --query "[?contains(name, 'TotalRegionalvCPUs')].currentValue" -o tsv)
-
-echo "Current vCPU quota: $CURRENT_QUOTA"
-
-if [ "$TOTAL_SPOT_VCPUS" -gt "$CURRENT_QUOTA" ]; then
-  echo "❌ INSUFFICIENT QUOTA - Request increase of $((TOTAL_SPOT_VCPUS - CURRENT_QUOTA)) vCPUs"
-else
-  echo "✅ Sufficient quota"
-fi
-```
+> See [`scripts/migration/validate-quota.sh`](../scripts/migration/validate-quota.sh) — Validates that your Azure VM quota can support the proposed spot pool sizing.
+> Usage: `scripts/migration/validate-quota.sh`
 
 #### Step 6: Standard Pool Sizing (Fallback Capacity)
 
@@ -465,96 +441,13 @@ The migration guide previously contained hardcoded SKUs. This causes issues when
 
 **Create a centralized `config.sh` pattern:**
 
-```bash
-#!/usr/bin/env bash
-# config.sh - Centralized SKU configuration for spot migration
-# Source this file before running migration scripts
-
-set -euo pipefail
-
-# ── Cluster identity ────────────────────────────────────────────────────────
-CLUSTER_NAME="${CLUSTER_NAME:-aks-spot-prod}"
-RESOURCE_GROUP="${RESOURCE_GROUP:-rg-aks-spot}"
-LOCATION="${LOCATION:-australiaeast}"
-
-# ── VM Family Selection by Pool ──────────────────────────────────────────────
-# Format: POOL_VM_SIZE_<poolname>=<sku>
-# Override these in your .env file to use different SKUs
-
-# Memory-optimized pools (priority 5 - lowest eviction risk)
-POOL_VM_SIZE_spotmemory1="${POOL_VM_SIZE_spotmemory1:-Standard_E4s_v5}"   # 4 vCPU, 32 GB
-POOL_VM_SIZE_spotmemory2="${POOL_VM_SIZE_spotmemory2:-Standard_E8s_v5}"   # 8 vCPU, 64 GB
-
-# General-purpose pools (priority 10)
-POOL_VM_SIZE_spotgeneral1="${POOL_VM_SIZE_spotgeneral1:-Standard_D4s_v5}" # 4 vCPU, 16 GB
-POOL_VM_SIZE_spotgeneral2="${POOL_VM_SIZE_spotgeneral2:-Standard_D8s_v5}" # 8 vCPU, 32 GB
-
-# Compute-optimized pools (priority 10)
-POOL_VM_SIZE_spotcompute="${POOL_VM_SIZE_spotcompute:-Standard_F8s_v2}"    # 8 vCPU, 16 GB
-
-# Standard pools (fallback)
-POOL_VM_SIZE_stdworkload="${POOL_VM_SIZE_stdworkload:-Standard_D4s_v5}"
-POOL_VM_SIZE_system="${POOL_VM_SIZE_system:-Standard_D4s_v5}"
-
-# ── Build SKU Array Dynamically ─────────────────────────────────────────────
-SPOT_SKUS=()
-for pool in spotmemory1 spotmemory2 spotgeneral1 spotgeneral2 spotcompute; do
-  var_name="POOL_VM_SIZE_${pool}"
-  sku="${!var_name}"
-  SPOT_SKUS+=("$sku")
-done
-
-echo "Configured spot SKUs for ${LOCATION}:"
-printf '  - %s\n' "${SPOT_SKUS[@]}"
-```
+> See [`scripts/migration/config.sh`](../scripts/migration/config.sh) — Centralized configuration for cluster identity and VM SKU selection.
+> Usage: `source scripts/migration/config.sh`
 
 #### Updated Quota Check Script
 
-```bash
-#!/usr/bin/env bash
-# check-spot-availability.sh - Validate SKU availability in target region
-
-set -euo pipefail
-
-# Load configuration
-source ./config.sh
-
-echo "=== Spot SKU Availability Check for ${LOCATION} ==="
-echo ""
-
-ALL_AVAILABLE=true
-
-for pool in spotmemory1 spotmemory2 spotgeneral1 spotgeneral2 spotcompute; do
-  var_name="POOL_VM_SIZE_${pool}"
-  SKU="${!var_name}"
-
-  # Check for restrictions
-  RESTRICTIONS=$(az vm list-skus --location "$LOCATION" --resource-type virtualMachines \
-    --query "[?name=='${SKU}'].restrictions | [0]" -o json 2>/dev/null || echo '[]')
-
-  if [ "$RESTRICTIONS" = "[]" ] || [ "$RESTRICTIONS" = "null" ]; then
-    echo "  ✅ ${pool}: ${SKU} - Available"
-  else
-    echo "  ❌ ${pool}: ${SKU} - Restricted"
-    echo "     Restrictions: $(echo "$RESTRICTIONS" | jq -r '.[].reasonCode' 2>/dev/null || echo 'Unknown')"
-    ALL_AVAILABLE=false
-  fi
-done
-
-echo ""
-if [ "$ALL_AVAILABLE" = true ]; then
-  echo "✅ All configured SKUs are available in ${LOCATION}"
-  exit 0
-else
-  echo "❌ Some SKUs are restricted. Update config.sh with alternative SKUs."
-  echo ""
-  echo "Available alternatives in ${LOCATION}:"
-  az vm list-skus --location "$LOCATION" --resource-type virtualMachines \
-    --query "[?contains(name, 's_v5') || contains(name, 's_v2')].name" -o tsv | \
-    grep -E '^[^ ]+$' | sort -u | head -20
-  exit 1
-fi
-```
+> See [`scripts/migration/check-spot-availability.sh`](../scripts/migration/check-spot-availability.sh) — Validates that the configured spot SKUs are available in your target Azure region.
+> Usage: `scripts/migration/check-spot-availability.sh`
 
 #### Region-Specific SKU Recommendations
 
@@ -667,8 +560,8 @@ resource "azurerm_kubernetes_cluster_node_pool" "spotgeneral1" {
 **Via Azure CLI:**
 
 ```bash
-# First, source your config.sh for configurable SKUs (see Section 2.8)
-source ./config.sh
+# First, source your `scripts/migration/config.sh` for configurable SKUs (see Section 2.8)
+source scripts/migration/config.sh
 
 az aks nodepool add \
   --resource-group $RESOURCE_GROUP \
@@ -750,61 +643,8 @@ kubectl get pods -A --field-selector=status.phase!=Running,status.phase!=Succeed
 
 Run this audit script against each namespace to classify workloads:
 
-```bash
-#!/usr/bin/env bash
-# spot-readiness-audit.sh - Scan deployments for spot eligibility
-# Usage: ./spot-readiness-audit.sh [namespace]
-
-set -euo pipefail
-
-NAMESPACE="${1:-default}"
-
-echo "=== Spot Readiness Audit: namespace=$NAMESPACE ==="
-echo ""
-
-kubectl get deployments -n "$NAMESPACE" -o json | \
-  jq -r '.items[] | {
-    name: .metadata.name,
-    replicas: .spec.replicas,
-    has_toleration: (
-      .spec.template.spec.tolerations // [] |
-      any(.key == "kubernetes.azure.com/scalesetpriority")
-    ),
-    has_pdb: false,
-    has_prestop: (
-      .spec.template.spec.containers[0].lifecycle.preStop != null
-    ),
-    has_readiness: (
-      .spec.template.spec.containers[0].readinessProbe != null
-    ),
-    termination_grace: (
-      .spec.template.spec.terminationGracePeriodSeconds // 30
-    ),
-    volumes: (
-      .spec.template.spec.volumes // [] | map(.name) | join(",")
-    )
-  }' | jq -s '.'
-
-echo ""
-echo "=== Classification ==="
-echo ""
-
-kubectl get deployments -n "$NAMESPACE" -o json | \
-  jq -r '.items[] |
-    .metadata.name as $name |
-    .spec.replicas as $replicas |
-    (
-      if (.spec.template.spec.volumes // [] | any(.persistentVolumeClaim)) then
-        "❌ NEVER  - \($name) (has PVC - stateful)"
-      elif ($replicas < 2) then
-        "⚠️  MAYBE  - \($name) (only \($replicas) replica - increase before spot)"
-      elif (.spec.template.spec.containers[0].lifecycle.preStop == null) then
-        "⚠️  MAYBE  - \($name) (no preStop hook - add graceful shutdown)"
-      else
-        "✅ READY  - \($name) (\($replicas) replicas, has preStop)"
-      end
-    )'
-```
+> See [`scripts/migration/spot-readiness-audit.sh`](../scripts/migration/spot-readiness-audit.sh) — Scans deployments in a namespace and classifies them by spot-readiness based on replicas and health probes.
+> Usage: `scripts/migration/spot-readiness-audit.sh <namespace>`
 
 **Output Example:**
 
@@ -1017,8 +857,8 @@ After successful pilot, add the remaining 4 spot pools for VM family diversity:
 **Via Azure CLI:**
 
 ```bash
-# First, source your config.sh for configurable SKUs (see Section 2.8)
-source ./config.sh
+# First, source your `scripts/migration/config.sh` for configurable SKUs (see Section 2.8)
+source scripts/migration/config.sh
 
 # Memory-optimized pools (priority 5 - preferred, lowest eviction risk)
 az aks nodepool add -g $RESOURCE_GROUP -n $CLUSTER_NAME \
@@ -1475,118 +1315,19 @@ Next Steps:
 
 ---
 
-## 11. Appendix: Scripts
+## 11. Appendix: Scripts (Standalone)
+
+The following scripts are now located in `scripts/migration/` to assist with cluster assessment and progress tracking.
 
 ### A. Full Cluster Spot Readiness Report
 
-```bash
-#!/usr/bin/env bash
-# cluster-spot-readiness.sh - Full cluster audit for spot migration
-# Usage: ./cluster-spot-readiness.sh
-
-set -euo pipefail
-
-echo "=============================================="
-echo "AKS Cluster Spot Migration Readiness Report"
-echo "Date: $(date)"
-echo "=============================================="
-
-echo ""
-echo "=== Cluster Info ==="
-kubectl cluster-info | head -1
-echo "Nodes: $(kubectl get nodes --no-headers | wc -l)"
-echo "Namespaces: $(kubectl get ns --no-headers | wc -l)"
-
-echo ""
-echo "=== Current Node Distribution ==="
-echo "Spot: $(kubectl get nodes -l kubernetes.azure.com/scalesetpriority=spot --no-headers 2>/dev/null | wc -l)"
-echo "Standard: $(kubectl get nodes -l priority=on-demand --no-headers 2>/dev/null | wc -l)"
-echo "System: $(kubectl get nodes -l agentpool=system --no-headers 2>/dev/null | wc -l)"
-
-echo ""
-echo "=== Deployment Readiness by Namespace ==="
-for ns in $(kubectl get ns -o name | cut -d/ -f2 | grep -v "^kube-"); do
-  TOTAL=$(kubectl get deployments -n "$ns" --no-headers 2>/dev/null | wc -l)
-  if [ "$TOTAL" -gt 0 ]; then
-    echo ""
-    echo "--- Namespace: $ns ($TOTAL deployments) ---"
-    kubectl get deployments -n "$ns" -o json 2>/dev/null | \
-      jq -r '.items[] |
-        .metadata.name as $name |
-        .spec.replicas as $replicas |
-        (
-          if (.spec.template.spec.volumes // [] | any(.persistentVolumeClaim)) then
-            "  ❌ NEVER  \($name) (stateful - has PVC)"
-          elif ($replicas < 2) then
-            "  ⚠️  MAYBE  \($name) (\($replicas) replica)"
-          elif (.spec.template.spec.containers[0].lifecycle.preStop == null) then
-            "  ⚠️  MAYBE  \($name) (no preStop hook)"
-          else
-            "  ✅ READY  \($name) (\($replicas) replicas)"
-          end
-        )'
-  fi
-done
-
-echo ""
-echo "=== Summary ==="
-TOTAL_DEPS=$(kubectl get deployments -A --no-headers | wc -l)
-echo "Total deployments: $TOTAL_DEPS"
-echo ""
-echo "Run per-namespace audit for detailed assessment."
-echo "=============================================="
-```
+> See [`scripts/migration/cluster-spot-readiness.sh`](../scripts/migration/cluster-spot-readiness.sh) — Generates a comprehensive report of spot readiness across the entire cluster.
+> Usage: `scripts/migration/cluster-spot-readiness.sh`
 
 ### B. Migration Progress Tracker
 
-```bash
-#!/usr/bin/env bash
-# migration-progress.sh - Check spot migration progress
-# Usage: ./migration-progress.sh
-
-set -euo pipefail
-
-echo "=== Spot Migration Progress ==="
-echo ""
-
-TOTAL_PODS=0
-SPOT_PODS=0
-STANDARD_PODS=0
-
-for ns in $(kubectl get ns -o name | cut -d/ -f2 | grep -v "^kube-"); do
-  for pod in $(kubectl get pods -n "$ns" -o jsonpath='{.items[*].spec.nodeName}' 2>/dev/null); do
-    if [ -n "$pod" ]; then
-      TOTAL_PODS=$((TOTAL_PODS + 1))
-      priority=$(kubectl get node "$pod" \
-        -o jsonpath='{.metadata.labels.kubernetes\.azure\.com/scalesetpriority}' 2>/dev/null)
-      if [ "$priority" = "spot" ]; then
-        SPOT_PODS=$((SPOT_PODS + 1))
-      else
-        STANDARD_PODS=$((STANDARD_PODS + 1))
-      fi
-    fi
-  done
-done
-
-if [ $TOTAL_PODS -gt 0 ]; then
-  SPOT_PCT=$((SPOT_PODS * 100 / TOTAL_PODS))
-else
-  SPOT_PCT=0
-fi
-
-echo "Total user pods:  $TOTAL_PODS"
-echo "On spot nodes:    $SPOT_PODS ($SPOT_PCT%)"
-echo "On standard:      $STANDARD_PODS"
-echo ""
-
-if [ $SPOT_PCT -ge 70 ]; then
-  echo "✅ Target met (>= 70% on spot)"
-elif [ $SPOT_PCT -ge 50 ]; then
-  echo "⚠️  Progress good but below 70% target"
-else
-  echo "❌ Below 50% - migration in progress"
-fi
-```
+> See [`scripts/migration/migration-progress.sh`](../scripts/migration/migration-progress.sh) — Tracks the percentage of user pods currently running on spot nodes vs standard nodes.
+> Usage: `scripts/migration/migration-progress.sh`
 
 ---
 
@@ -1603,5 +1344,5 @@ fi
 
 ---
 
-**Last Updated:** 2026-02-10
+**Last Updated:** 2026-02-11
 **Status:** Ready for use

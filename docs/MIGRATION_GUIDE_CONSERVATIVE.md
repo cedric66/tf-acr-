@@ -3,7 +3,7 @@
 **Audience:** Cloud Operations and Application Teams seeking a lower-risk approach
 **Purpose:** Simplified spot migration with 3 pools and 40% target
 **Timeline:** 3-4 weeks
-**Last Updated:** 2026-02-10
+**Last Updated:** 2026-02-11
 
 > **Is this guide right for you?** See [Quick Start Decision](#quick-start-decision) below. For advanced configuration (5+ pools, 70%+ target), see [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md).
 
@@ -610,5 +610,5 @@ Consider upgrading to [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) if:
 
 ---
 
-**Last Updated:** 2026-02-10
+**Last Updated:** 2026-02-11
 **Status:** Ready for use

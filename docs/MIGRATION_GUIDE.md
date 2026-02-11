@@ -320,7 +320,7 @@ Per-pool sizing should balance three competing goals:
 # Calculate total vCPU requests across all namespaces (memory calculation excluded)
 kubectl get deployments -A -o json | jq -r '
   .items[] |
-  select((.spec.template.spec.tolerations // []) | any(.key == "kubernetes.azure.com/scalesetpriority")) |
+  # Counts ALL deployments (not just spot-tolerant) for pre-migration planning
   {
     name: .metadata.name,
     namespace: .metadata.namespace,
@@ -333,7 +333,9 @@ kubectl get deployments -A -o json | jq -r '
 '
 ```
 
-The script outputs your cluster's **actual total vCPU baseline** — the sum of CPU requests × replica count across all spot-tolerant deployments. Use this number as your "Total vCPU needed" in the table below. The table shows example values; replace them with your own.
+The script outputs your cluster's **actual total vCPU baseline** — the sum of CPU requests × replica count across all deployments. Use this number as your "Total vCPU needed" in the table below. The table shows example values; replace them with your own.
+
+Note: This counts **all** deployments regardless of spot toleration — that is intentional. You are planning for how much capacity your workloads need in total, not just the ones already on spot. Workloads without CPU requests set will count as 0 — check kubectl top nodes for actual utilization if your results seem too low.
 
 | Metric | How to Calculate | Example (replace with yours) |
 |--------|------------------|---------|

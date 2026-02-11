@@ -333,12 +333,16 @@ kubectl get deployments -A -o json | jq -r '
 '
 ```
 
-| Metric | How to Calculate | Example |
+The script outputs your cluster's **actual total vCPU baseline** — the sum of CPU requests × replica count across all spot-tolerant deployments. Use this number as your "Total vCPU needed" in the table below. The table shows example values; replace them with your own.
+
+| Metric | How to Calculate | Example (replace with yours) |
 |--------|------------------|---------|
 | **Total vCPU needed** | Sum of all pod requests × replicas | 120 vCPUs |
 | **Total memory needed** | Sum of all pod memory requests × replicas | 240 GB |
 | **Peak buffer** | Add 20-30% for spikes | +36 vCPUs |
 | **Baseline requirement** | Total + buffer | **156 vCPUs** |
+
+> **Your calculation:** If the script output `X`, add 20–30% buffer → `X * 1.3` is your baseline requirement. Proceed to Step 2 with this number.
 
 #### Step 2: Apply the 50% Spot Target Rule
 

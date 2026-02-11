@@ -317,20 +317,19 @@ Per-pool sizing should balance three competing goals:
 **First, determine your total workload requirements:**
 
 ```bash
-# Calculate total vCPU and memory requests across all namespaces
+# Calculate total vCPU requests across all namespaces (memory calculation excluded)
 kubectl get deployments -A -o json | jq -r '
   .items[] |
-  select(.spec.template.spec.tolerations? // [] | any(.key == "kubernetes.azure.com/scalesetpriority")) |
+  select((.spec.template.spec.tolerations // []) | any(.key == "kubernetes.azure.com/scalesetpriority")) |
   {
     name: .metadata.name,
     namespace: .metadata.namespace,
     replicas: .spec.replicas,
-    cpu: (.spec.template.spec.containers | map(.resources.requests.cpu // "0") | map tonumber | add),
-    memory: (.spec.template.spec.containers | map(.resources.requests.memory // "0") | add)
+    cpu: (.spec.template.spec.containers | map(.resources.requests.cpu // "0") | map(if endswith("m") then (rtrimstr("m") | tonumber / 1000) else tonumber end) | add)
   }
 ' | jq -s '
-  map(.replicas *= .cpu) | add | "Total vCPU: \(.)",
-  map(.replicas *= .memory) | add | "Total memory: \(.)"
+  # Note: Memory calculation requires complex unit conversion (Mi, Gi, M, G) and is out of scope for this quick check.
+  "Total vCPU (approximate): \([.[] | .replicas * .cpu] | add // 0)"
 '
 ```
 

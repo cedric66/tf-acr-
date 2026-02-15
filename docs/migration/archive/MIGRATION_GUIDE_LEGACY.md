@@ -4,7 +4,7 @@
 **Purpose:** Step-by-step guide to safely add spot node pools to an existing AKS cluster and migrate workloads
 **Last Updated:** 2026-02-11
 
-> **This guide is for existing clusters.** If you are deploying a new cluster from scratch, see [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md).
+> **This guide is for existing clusters.** If you are deploying a new cluster from scratch, see [../../operations/DEPLOYMENT_GUIDE.md](../../operations/DEPLOYMENT_GUIDE.md).
 >
 > **Looking for a simpler approach?** See [MIGRATION_GUIDE_CONSERVATIVE.md](MIGRATION_GUIDE_CONSERVATIVE.md) for a streamlined 3-pool, 40% spot target guide (3-4 weeks vs 6-8 weeks).
 
@@ -1340,7 +1340,7 @@ The following scripts are now located in `scripts/migration/` to assist with clu
 
 | Document | Purpose |
 |----------|---------|
-| [Deployment Guide](DEPLOYMENT_GUIDE.md) | New cluster deployment (greenfield) |
+| [Deployment Guide](../../operations/DEPLOYMENT_GUIDE.md) | New cluster deployment (greenfield) |
 | [DevOps Team Guide](DEVOPS_TEAM_GUIDE.md) | Application spot configuration templates |
 | [SRE Operational Runbook](SRE_OPERATIONAL_RUNBOOK.md) | Incident response (Runbooks 1-10) |
 | [Troubleshooting Guide](TROUBLESHOOTING_GUIDE.md) | Symptom-first diagnostics |

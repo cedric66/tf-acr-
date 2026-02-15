@@ -209,8 +209,21 @@ async function generate() {
                 new Paragraph({ children: [new PageBreak()] }),
 
                 // TOC
-                new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun("1. Executive Table of Contents")] }),
-                new TableOfContents("Table of Contents", { hyperlink: true, headingStyleRange: "1-3" }),
+                new Paragraph({ 
+                    heading: HeadingLevel.HEADING_1, 
+                    alignment: AlignmentType.CENTER,
+                    spacing: { before: 480, after: 480 },
+                    children: [new TextRun("1. Executive Table of Contents")] 
+                }),
+                new TableOfContents("Table of Contents", { 
+                    hyperlink: true, 
+                    headingStyleRange: "1-3",
+                    styles: {
+                        topLevel: {
+                            run: { size: 24, bold: true, color: PRIMARY_BLUE }
+                        }
+                    }
+                }),
                 
                 new Paragraph({ children: [new PageBreak()] }),
 
@@ -264,6 +277,15 @@ function parseMarkdownFile(filePath) {
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         const trimmed = line.trim();
+
+        // Skip existing Table of Contents headers and their immediate list/text
+        if (trimmed.toLowerCase().includes("table of contents")) {
+            // Skip the next few lines if they are part of a TOC list
+            while (i + 1 < lines.length && (lines[i+1].trim().startsWith("-") || lines[i+1].trim().startsWith("*") || lines[i+1].trim() === "")) {
+                i++;
+            }
+            continue;
+        }
 
         if (trimmed.startsWith("```")) {
             if (inCodeBlock) {

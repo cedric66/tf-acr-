@@ -59,3 +59,7 @@ tests/spot-behavior-python/results/
 tests/spot-behavior-python/categories/__pycache__/
 tests/spot-behavior-python/lib/__pycache__/
 tests/spot-behavior-python/__pycache__/
+
+# Environment variables
+.env
+.env.*

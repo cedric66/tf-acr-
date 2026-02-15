@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Migration Flow Dynamics - Generative Visualization</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&family=Lora:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --anthropic-dark: #141413;
+            --anthropic-light: #faf9f5;
+            --anthropic-mid-gray: #b0aea5;
+            --anthropic-light-gray: #e8e6dc;
+            --anthropic-orange: #d97757;
+            --anthropic-blue: #6a9bcc;
+            --anthropic-green: #788c5d;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, var(--anthropic-light) 0%, #f5f3ee 100%);
+            min-height: 100vh;
+            color: var(--anthropic-dark);
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+            padding: 20px;
+            gap: 20px;
+        }
+
+        .sidebar {
+            width: 320px;
+            flex-shrink: 0;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(20, 20, 19, 0.1);
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .sidebar h1 {
+            font-family: 'Lora', serif;
+            font-size: 24px;
+            font-weight: 500;
+            color: var(--anthropic-dark);
+            margin-bottom: 8px;
+        }
+
+        .sidebar .subtitle {
+            color: var(--anthropic-mid-gray);
+            font-size: 14px;
+            margin-bottom: 32px;
+            line-height: 1.4;
+        }
+
+        .control-section {
+            margin-bottom: 32px;
+        }
+
+        .control-section h3 {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--anthropic-dark);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .control-section h3::before {
+            content: '•';
+            color: var(--anthropic-orange);
+            font-weight: bold;
+        }
+
+        .seed-input {
+            width: 100%;
+            background: var(--anthropic-light);
+            padding: 12px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            margin-bottom: 12px;
+            border: 1px solid var(--anthropic-light-gray);
+            text-align: center;
+        }
+
+        .seed-input:focus {
+            outline: none;
+            border-color: var(--anthropic-orange);
+            box-shadow: 0 0 0 2px rgba(217, 119, 87, 0.1);
+            background: white;
+        }
+
+        .seed-controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .regen-button {
+            margin-bottom: 0;
+        }
+
+        .control-group {
+            margin-bottom: 20px;
+        }
+
+        .control-group label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--anthropic-dark);
+            margin-bottom: 8px;
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .slider-container input[type="range"] {
+            flex: 1;
+            height: 4px;
+            background: var(--anthropic-light-gray);
+            border-radius: 2px;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .slider-container input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: var(--anthropic-orange);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .slider-container input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.1);
+            background: #c86641;
+        }
+
+        .value-display {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: var(--anthropic-mid-gray);
+            min-width: 60px;
+            text-align: right;
+        }
+
+        .button {
+            background: var(--anthropic-orange);
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            width: 100%;
+        }
+
+        .button:hover {
+            background: #c86641;
+            transform: translateY(-1px);
+        }
+
+        .button:active {
+            transform: translateY(0);
+        }
+
+        .button.secondary {
+            background: var(--anthropic-blue);
+        }
+
+        .button.secondary:hover {
+            background: #5a8bb8;
+        }
+
+        .button.tertiary {
+            background: var(--anthropic-green);
+        }
+
+        .button.tertiary:hover {
+            background: #6b7b52;
+        }
+
+        .button-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .button-row .button {
+            flex: 1;
+        }
+
+        .canvas-area {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 0;
+        }
+
+        #canvas-container {
+            width: 100%;
+            max-width: 1000px;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(20, 20, 19, 0.1);
+            background: white;
+        }
+
+        #canvas-container canvas {
+            display: block;
+            width: 100% !important;
+            height: auto !important;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: var(--anthropic-mid-gray);
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+            }
+
+            .canvas-area {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <h1>Migration Flow Dynamics</h1>
+            <div class="subtitle">Generative visualization of AKS spot migration workflow patterns</div>
+
+            <div class="control-section">
+                <h3>Seed</h3>
+                <input type="number" id="seed-input" class="seed-input" value="12345" onchange="updateSeed()">
+                <div class="seed-controls">
+                    <button class="button secondary" onclick="previousSeed()">← Prev</button>
+                    <button class="button secondary" onclick="nextSeed()">Next →</button>
+                </div>
+                <button class="button tertiary regen-button" onclick="randomSeedAndUpdate()">↻ Random</button>
+            </div>
+
+            <div class="control-section">
+                <h3>Parameters</h3>
+
+                <div class="control-group">
+                    <label>Workload Pods</label>
+                    <div class="slider-container">
+                        <input type="range" id="podCount" min="500" max="5000" step="100" value="2000" oninput="updateParam('podCount', this.value)">
+                        <span class="value-display" id="podCount-value">2000</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Migration Velocity</label>
+                    <div class="slider-container">
+                        <input type="range" id="flowSpeed" min="0.2" max="3.0" step="0.1" value="1.0" oninput="updateParam('flowSpeed', this.value)">
+                        <span class="value-display" id="flowSpeed-value">1.0</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Spot Turbulence</label>
+                    <div class="slider-container">
+                        <input type="range" id="turbulence" min="0.005" max="0.03" step="0.001" value="0.015" oninput="updateParam('turbulence', this.value)">
+                        <span class="value-display" id="turbulence-value">0.015</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Trail Persistence</label>
+                    <div class="slider-container">
+                        <input type="range" id="trailLength" min="5" max="30" step="1" value="15" oninput="updateParam('trailLength', this.value)">
+                        <span class="value-display" id="trailLength-value">15</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Eviction Rate</label>
+                    <div class="slider-container">
+                        <input type="range" id="evictionRate" min="0" max="0.01" step="0.001" value="0.003" oninput="updateParam('evictionRate', this.value)">
+                        <span class="value-display" id="evictionRate-value">0.003</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="control-section">
+                <h3>Actions</h3>
+                <div class="button-row">
+                    <button class="button" onclick="resetParameters()">Reset</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="canvas-area">
+            <div id="canvas-container">
+                <div class="loading">Initializing migration flow...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let params = {
+            seed: 12345,
+            podCount: 2000,
+            flowSpeed: 1.0,
+            turbulence: 0.015,
+            trailLength: 15,
+            evictionRate: 0.003,
+            colorPalette: {
+                system: '#8B5A2B',
+                standard: '#6a9bcc',
+                spot: '#d97757',
+                evicted: '#c86641'
+            }
+        };
+
+        let defaultParams = {...params};
+
+        let particles = [];
+        let flowField = [];
+        let cols, rows;
+        let scl = 20;
+        let poolZones = [];
+
+        function setup() {
+            let canvas = createCanvas(1200, 800);
+            canvas.parent('canvas-container');
+
+            initializeSystem();
+
+            document.querySelector('.loading').style.display = 'none';
+        }
+
+        function initializeSystem() {
+            randomSeed(params.seed);
+            noiseSeed(params.seed);
+
+            particles = [];
+            poolZones = [];
+
+            // Define pool regions (horizontal bands)
+            poolZones = [
+                { name: 'system', y: 0, h: height * 0.2, priority: 30, color: params.colorPalette.system },
+                { name: 'standard', y: height * 0.2, h: height * 0.3, priority: 20, color: params.colorPalette.standard },
+                { name: 'spot1', y: height * 0.5, h: height * 0.17, priority: 10, color: params.colorPalette.spot },
+                { name: 'spot2', y: height * 0.67, h: height * 0.17, priority: 5, color: params.colorPalette.spot },
+                { name: 'spot3', y: height * 0.84, h: height * 0.16, priority: 5, color: params.colorPalette.spot }
+            ];
+
+            cols = floor(width / scl);
+            rows = floor(height / scl);
+
+            generateFlowField();
+
+            // Initialize particles across all zones
+            for (let i = 0; i < params.podCount; i++) {
+                particles.push(new WorkloadPod());
+            }
+
+            background(250, 249, 245);
+        }
+
+        function generateFlowField() {
+            flowField = [];
+
+            for (let y = 0; y < rows; y++) {
+                flowField[y] = [];
+                for (let x = 0; x < cols; x++) {
+                    let angle = 0;
+                    let zoneIndex = floor((y * scl) / height * 5);
+                    zoneIndex = constrain(zoneIndex, 0, poolZones.length - 1);
+
+                    let zone = poolZones[zoneIndex];
+
+                    // Base flow direction based on zone priority
+                    if (zone.name === 'system') {
+                        // System pool: stable foundation, gentle left-to-right
+                        angle = 0;
+                    } else if (zone.name === 'standard') {
+                        // Standard pool: reliable steady flow
+                        angle = 0.1 + noise(x * 0.1, y * 0.1) * 0.5;
+                    } else {
+                        // Spot pools: more turbulent, varied
+                        let nx = x * params.turbulence;
+                        let ny = y * params.turbulence;
+                        angle = noise(nx, ny) * TWO_PI * 2;
+
+                        // Add zone-specific variations
+                        if (zone.name === 'spot1') angle += 0.3;
+                        else if (zone.name === 'spot2') angle -= 0.2;
+                        else angle += 0.5;
+                    }
+
+                    flowField[y][x] = angle;
+                }
+            }
+        }
+
+        function draw() {
+            // Semi-transparent background for trail effect
+            fill(250, 249, 245, 30);
+            noStroke();
+            rect(0, 0, width, height);
+
+            // Draw pool zone labels
+            drawZoneLabels();
+
+            // Update and draw particles
+            for (let particle of particles) {
+                particle.update();
+                particle.show();
+            }
+
+            // Handle evictions
+            if (random() < params.evictionRate) {
+                triggerEviction();
+            }
+        }
+
+        function drawZoneLabels() {
+            textAlign(LEFT, TOP);
+            textSize(12);
+            noStroke();
+
+            for (let zone of poolZones) {
+                let zoneColor = color(zone.color);
+                zoneColor.setAlpha(30);
+                fill(zoneColor);
+                rect(0, zone.y, width, zone.h);
+
+                // Zone label
+                zoneColor.setAlpha(150);
+                fill(zoneColor);
+                let label = zone.name.toUpperCase();
+                if (zone.name.startsWith('spot')) {
+                    label += ` (Priority ${zone.priority})`;
+                }
+                text(label, 20, zone.y + 10);
+            }
+        }
+
+        function triggerEviction() {
+            // Find a particle in a spot zone
+            let spotParticles = particles.filter(p => {
+                let zone = getZoneAt(p.pos.y);
+                return zone && zone.name.startsWith('spot');
+            });
+
+            if (spotParticles.length > 0) {
+                let victim = random(spotParticles);
+                victim.evict();
+            }
+        }
+
+        function getZoneAt(y) {
+            for (let zone of poolZones) {
+                if (y >= zone.y && y < zone.y + zone.h) {
+                    return zone;
+                }
+            }
+            return null;
+        }
+
+        class WorkloadPod {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                // Start in random zone with probability distribution
+                let r = random();
+                let zone;
+
+                if (r < 0.15) {
+                    zone = poolZones[0]; // System
+                } else if (r < 0.45) {
+                    zone = poolZones[1]; // Standard
+                } else if (r < 0.65) {
+                    zone = poolZones[2]; // Spot 1
+                } else if (r < 0.85) {
+                    zone = poolZones[3]; // Spot 2
+                } else {
+                    zone = poolZones[4]; // Spot 3
+                }
+
+                this.pos = createVector(random(width), random(zone.y, zone.y + zone.h));
+                this.vel = createVector(0, 0);
+                this.acc = createVector(0, 0);
+                this.maxSpeed = params.flowSpeed * 2;
+                this.currentZone = zone;
+                this.color = zone.color;
+                this.trail = [];
+                this.evicted = false;
+                this.evictionTimer = 0;
+            }
+
+            update() {
+                if (this.evicted) {
+                    this.evictionTimer++;
+                    if (this.evictionTimer > 60) {
+                        this.reschedule();
+                    }
+                    return;
+                }
+
+                // Get flow field angle at current position
+                let x = floor(this.pos.x / scl);
+                let y = floor(this.pos.y / scl);
+                x = constrain(x, 0, cols - 1);
+                y = constrain(y, 0, rows - 1);
+
+                let angle = flowField[y][x];
+
+                // Apply flow force
+                let flowForce = p5.Vector.fromAngle(angle);
+                flowForce.mult(0.5);
+                this.acc.add(flowForce);
+
+                this.vel.add(this.acc);
+                this.vel.limit(this.maxSpeed);
+                this.pos.add(this.vel);
+                this.acc.mult(0);
+
+                // Store trail
+                this.trail.push(this.pos.copy());
+                if (this.trail.length > params.trailLength) {
+                    this.trail.shift();
+                }
+
+                // Update zone
+                let newZone = getZoneAt(this.pos.y);
+                if (newZone && newZone !== this.currentZone) {
+                    this.currentZone = newZone;
+                    this.color = newZone.color;
+                }
+
+                // Wrap edges
+                if (this.pos.x > width) this.pos.x = 0;
+                if (this.pos.x < 0) this.pos.x = width;
+                if (this.pos.y > height) this.pos.y = 0;
+                if (this.pos.y < 0) this.pos.y = height;
+            }
+
+            evict() {
+                if (!this.evicted && this.currentZone.name.startsWith('spot')) {
+                    this.evicted = true;
+                    this.evictionTimer = 0;
+                    this.color = params.colorPalette.evicted;
+                }
+            }
+
+            reschedule() {
+                this.evicted = false;
+                this.evictionTimer = 0;
+
+                // Migrate to standard pool (fallback)
+                let standardZone = poolZones[1];
+                this.pos.y = random(standardZone.y, standardZone.y + standardZone.h);
+                this.pos.x = random(width);
+                this.currentZone = standardZone;
+                this.color = standardZone.color;
+
+                this.trail = [];
+                this.vel.mult(0.5);
+            }
+
+            show() {
+                // Draw trail
+                if (this.trail.length > 1) {
+                    noFill();
+                    strokeWeight(1.5);
+
+                    for (let i = 0; i < this.trail.length - 1; i++) {
+                        let alpha = map(i, 0, this.trail.length, 0, 200);
+                        let trailColor = color(this.color);
+                        trailColor.setAlpha(alpha);
+                        stroke(trailColor);
+                        line(
+                            this.trail[i].x, this.trail[i].y,
+                            this.trail[i + 1].x, this.trail[i + 1].y
+                        );
+                    }
+                }
+
+                // Draw particle
+                noStroke();
+                fill(this.color);
+
+                if (this.evicted) {
+                    // Evicted particles glow
+                    drawingContext.shadowBlur = 10;
+                    drawingContext.shadowColor = this.color;
+                    ellipse(this.pos.x, this.pos.y, 8, 8);
+                    drawingContext.shadowBlur = 0;
+                } else {
+                    ellipse(this.pos.x, this.pos.y, 4, 4);
+                }
+            }
+        }
+
+        function updateParam(paramName, value) {
+            params[paramName] = parseFloat(value);
+            document.getElementById(`${paramName}-value`).textContent = value;
+
+            if (paramName === 'turbulence') {
+                generateFlowField();
+            }
+        }
+
+        function updateSeedDisplay() {
+            document.getElementById('seed-input').value = params.seed;
+        }
+
+        function updateSeed() {
+            let input = document.getElementById('seed-input');
+            let newSeed = parseInt(input.value);
+            if (newSeed && newSeed > 0) {
+                params.seed = newSeed;
+                initializeSystem();
+            } else {
+                updateSeedDisplay();
+            }
+        }
+
+        function previousSeed() {
+            params.seed = Math.max(1, params.seed - 1);
+            updateSeedDisplay();
+            initializeSystem();
+        }
+
+        function nextSeed() {
+            params.seed = params.seed + 1;
+            updateSeedDisplay();
+            initializeSystem();
+        }
+
+        function randomSeedAndUpdate() {
+            params.seed = Math.floor(Math.random() * 999999) + 1;
+            updateSeedDisplay();
+            initializeSystem();
+        }
+
+        function resetParameters() {
+            params = {...defaultParams};
+
+            document.getElementById('podCount').value = params.podCount;
+            document.getElementById('podCount-value').textContent = params.podCount;
+            document.getElementById('flowSpeed').value = params.flowSpeed;
+            document.getElementById('flowSpeed-value').textContent = params.flowSpeed;
+            document.getElementById('turbulence').value = params.turbulence;
+            document.getElementById('turbulence-value').textContent = params.turbulence;
+            document.getElementById('trailLength').value = params.trailLength;
+            document.getElementById('trailLength-value').textContent = params.trailLength;
+            document.getElementById('evictionRate').value = params.evictionRate;
+            document.getElementById('evictionRate-value').textContent = params.evictionRate;
+
+            updateSeedDisplay();
+            initializeSystem();
+        }
+
+        window.addEventListener('load', function() {
+            updateSeedDisplay();
+        });
+    </script>
+</body>
+</html>
